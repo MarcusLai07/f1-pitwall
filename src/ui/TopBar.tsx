@@ -4,6 +4,7 @@ import { TRACK_STATUS, cn, formatDuration, parseDuration, parseGmtOffset, parseU
 import { useLayout } from "../layout/layoutStore";
 import { WIDGETS, type WidgetId } from "../widgets/registry";
 import { useTicker } from "./hooks";
+import { HeaderWeather } from "./HeaderWeather";
 
 interface Props {
   onGoLive: () => void;
@@ -17,6 +18,7 @@ export function TopBar({ onGoLive, onOpenRecording }: Props) {
     <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-800 bg-zinc-950 px-3 py-1.5">
       <SessionTitle compact={compact} />
       <SessionClock />
+      <HeaderWeather compact={compact} />
       <div className="ml-auto flex items-center gap-2">
         <SourceStatus onGoLive={onGoLive} onOpenRecording={onOpenRecording} compact={compact} />
         <LayoutMenu />
@@ -53,26 +55,51 @@ function SessionClock() {
   useTicker(2);
   const clock = usePitwall((s) => s.live.ExtrapolatedClock);
   const laps = usePitwall((s) => s.live.LapCount);
-  const offset = usePitwall((s) => parseGmtOffset(s.live.SessionInfo?.GmtOffset));
+  const gmtOffset = usePitwall((s) => s.live.SessionInfo?.GmtOffset);
+  const offset = parseGmtOffset(gmtOffset);
   const now = trackNow();
   let remaining = parseDuration(clock?.Remaining);
   if (clock?.Extrapolating) remaining -= now - parseUtc(clock.Utc);
   return (
     <div className="flex items-center gap-4 font-f1 tabular-nums">
-      {Number.isFinite(remaining) && (
-        <Field label="Remaining" value={formatDuration(remaining)} />
-      )}
+      {Number.isFinite(remaining) && <Field label="Remaining" value={formatDuration(remaining)} />}
       {laps?.TotalLaps ? <Field label="Lap" value={`${laps.CurrentLap ?? 0}/${laps.TotalLaps}`} /> : null}
-      <Field label="Track time" value={trackClock(now, offset)} />
+      {/* Same moment twice: at the circuit, and in your own time zone */}
+      <Field label="Track time" zone={gmtOffset ? utcLabel(offset) : undefined} value={trackClock(now, offset)} />
+      <Field label="Your time" zone={localZone(now)} value={localClock(now)} accent="text-sky-200" />
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+/** -18000000 -> "UTC−5" */
+function utcLabel(offsetMs: number): string {
+  const h = offsetMs / 3_600_000;
+  if (!h) return "UTC";
+  const abs = Math.abs(h);
+  const text = Number.isInteger(abs) ? String(abs) : `${Math.floor(abs)}:${String(Math.round((abs % 1) * 60)).padStart(2, "0")}`;
+  return `UTC${h < 0 ? "−" : "+"}${text}`;
+}
+
+const localTime = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+const localZoneName = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+
+function localClock(epochMs: number): string {
+  return Number.isFinite(epochMs) ? localTime.format(epochMs) : "--:--:--";
+}
+
+function localZone(epochMs: number): string | undefined {
+  if (!Number.isFinite(epochMs)) return undefined;
+  return localZoneName.formatToParts(epochMs).find((p) => p.type === "timeZoneName")?.value;
+}
+
+function Field({ label, value, zone, accent }: { label: string; value: string; zone?: string; accent?: string }) {
   return (
     <div className="flex flex-col leading-tight">
-      <span className="text-[9px] uppercase tracking-wider text-zinc-500">{label}</span>
-      <span className="text-sm font-bold text-zinc-100">{value}</span>
+      <span className="text-[9px] uppercase tracking-wider text-zinc-500">
+        {label}
+        {zone && <span className="ml-1 normal-case tracking-normal text-zinc-600">{zone}</span>}
+      </span>
+      <span className={cn("text-sm font-bold", accent ?? "text-zinc-100")}>{value}</span>
     </div>
   );
 }

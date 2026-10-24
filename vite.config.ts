@@ -1,6 +1,6 @@
-import { createReadStream, existsSync } from "node:fs";
+import { copyFileSync, createReadStream, existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { defineConfig, type Plugin } from "vite";
+import { defaultClientConditions, defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -20,13 +20,40 @@ function serveRecordings(): Plugin {
   };
 }
 
+// Team radio transcription runs onnxruntime-web's WebAssembly build. Extension pages
+// can't import code from its CDN, so ship it in public/ort (git-ignored, copied here).
+function copyOnnxRuntime(): Plugin {
+  return {
+    name: "copy-onnxruntime",
+    buildStart() {
+      const from = resolve(import.meta.dirname, "node_modules/onnxruntime-web/dist");
+      const to = resolve(import.meta.dirname, "public/ort");
+      mkdirSync(to, { recursive: true });
+      for (const f of ["ort-wasm-simd-threaded.asyncify.mjs", "ort-wasm-simd-threaded.asyncify.wasm"]) {
+        copyFileSync(resolve(from, f), resolve(to, f));
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), serveRecordings()],
+  plugins: [react(), tailwindcss(), serveRecordings(), copyOnnxRuntime()],
+  // onnxruntime-web's "extern wasm" build loads its runtime from public/ort (set in the
+  // transcription worker) instead of bundling a second 27 MB copy
+  resolve: { conditions: ["onnxruntime-web-use-extern-wasm", ...defaultClientConditions] },
   server: {
     port: 5288,
     // MultiViewer's API sends no CORS headers; the extension gets around that with
     // host_permissions, the dev page goes through this proxy instead.
-    proxy: { "/mv": { target: "http://localhost:10101", rewrite: (p) => p.replace(/^\/mv/, "") } },
+    proxy: {
+      "/mv": { target: "http://localhost:10101", rewrite: (p) => p.replace(/^\/mv/, "") },
+      // Team radio clips for transcription (F1's archive sends no CORS headers)
+      "/f1static": {
+        target: "https://livetiming.formula1.com",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/f1static/, "/static"),
+      },
+    },
   },
   build: {
     target: "chrome120",

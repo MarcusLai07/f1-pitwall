@@ -4,8 +4,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { circuitIdFor, loadCircuit, type CircuitData } from "../data/circuits";
 import type { CircuitGeometry } from "../circuits/geometry-schema";
+import { applySim } from "../circuit3d/autoAlign";
+import { useTrackShape, type TrackShape } from "./trackShape";
 import { positionAt } from "../data/buffers";
 import { buildRows } from "../data/derive";
 import { trackNow, usePitwall } from "../data/store";
@@ -18,51 +19,39 @@ import { DRS_COLOR, SECTOR_COLORS, type ViewPreset } from "../circuit3d/constant
 import { cn } from "../lib/format";
 import { useSize } from "../ui/hooks";
 
-interface Loaded {
-  id: string;
-  circuit: CircuitData;
-  geometry: CircuitGeometry | null;
-}
-
 export function TrackMap() {
-  const info = usePitwall((s) => s.live.SessionInfo);
-  const circuitId = useMemo(() => circuitIdFor(info), [info]);
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [missing, setMissing] = useState(false);
+  const { shape, status } = useTrackShape();
+  // While a new shape is being built, the stored one would put cars in the wrong place
+  const building = status === "building";
 
-  useEffect(() => {
-    let alive = true;
-    setMissing(false);
-    if (!circuitId) {
-      setLoaded(null);
-      setMissing(!!info);
-      return;
-    }
-    loadCircuit(circuitId).then((r) => {
-      if (!alive) return;
-      if (r) setLoaded({ id: circuitId, ...r });
-      else setMissing(true);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [circuitId, info]);
-
-  if (missing) {
+  if (!shape) {
     return (
-      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-muted-foreground">
-        No track map for {info?.Meeting?.Circuit?.ShortName ?? "this circuit"} yet
+      <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
+        {building ? "Building the track map from live positions… (needs one clean lap)" : "Waiting for session"}
       </div>
     );
   }
-  if (!loaded) {
-    return <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Waiting for session</div>;
-  }
-  return <MapScene key={loaded.id} loaded={loaded} />;
+  return (
+    <MapScene key={`${shape.key}:${shape.source}`} shape={shape} hideCars={building}>
+      {building && (
+        <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border border-zinc-700 bg-zinc-950/90 px-3 py-1.5 text-[11px] text-zinc-300">
+          This layout doesn't match the stored map · building it from live positions…
+        </span>
+      )}
+      {shape.source !== "stored" && (
+        <span
+          className="pointer-events-none absolute bottom-8 left-2.5 text-[9px] uppercase tracking-[0.14em] text-zinc-600"
+          title={shape.source === "live" ? "Drawn from a live lap because the stored track shape didn't match" : "Stored track shape re-aligned to live positions"}
+        >
+          {shape.source === "live" ? "Track from live positions" : "Track auto-aligned"}
+        </span>
+      )}
+    </MapScene>
+  );
 }
 
-function MapScene({ loaded }: { loaded: Loaded }) {
-  const { circuit, geometry } = loaded;
+function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: boolean; children?: React.ReactNode }) {
+  const { circuit, geometry, sim } = shape;
   const [hostRef, size] = useSize<HTMLDivElement>();
   const chipsRef = useRef<HTMLDivElement>(null);
   const carsRef = useRef<HTMLDivElement>(null);
@@ -70,6 +59,13 @@ function MapScene({ loaded }: { loaded: Loaded }) {
   const [preset, setPreset] = useState<ViewPreset>("top");
   const [follow, setFollow] = useState(false);
   const ready = size.width > 0 && size.height > 0;
+  const hideCarsRef = useRef(hideCars);
+  hideCarsRef.current = hideCars;
+  // Raw positions (decimeters) → geometry space; a re-fitted transform takes meters
+  const toTrack = useMemo(
+    () => (sim ? (x: number, y: number) => applySim(sim, x / 10, y / 10) : geometry ? mapperFor(geometry) : null),
+    [sim, geometry]
+  );
 
   // Race control gates 2026 Overtake Mode like it used to gate DRS
   const overtakeEnabled = usePitwall((s) => {
@@ -119,12 +115,15 @@ function MapScene({ loaded }: { loaded: Loaded }) {
     for (const m of handle.drsMeshes) (m.material as THREE.MeshBasicMaterial).opacity = 0.85;
 
     const carLayer = createCarLayer(handle, projector, carsRef.current!);
-    const mapper = geometry ? mapperFor(geometry) : null;
+    const mapper = toTrack;
     let pitSet = new Set<string>();
     let rowsRef = usePitwall.getState().live.TimingData;
 
     const unsubFrame = handle.onFrame(() => {
-      if (!mapper) return;
+      if (!mapper || hideCarsRef.current) {
+        carLayer.sync([]);
+        return;
+      }
       const { live, selected } = usePitwall.getState();
       if (live.TimingData !== rowsRef) {
         rowsRef = live.TimingData;
@@ -159,7 +158,7 @@ function MapScene({ loaded }: { loaded: Loaded }) {
       handle.dispose();
     };
     // Built once per circuit; size changes go through handle.resize below
-  }, [ready, circuit, geometry]);
+  }, [ready, circuit, geometry, toTrack]);
 
   useEffect(() => {
     if (!engine || !ready) return;
@@ -177,13 +176,13 @@ function MapScene({ loaded }: { loaded: Loaded }) {
     const v = new THREE.Vector3();
     engine.controls.setFollowTarget(() => {
       const num = usePitwall.getState().selected[0];
-      if (!num || !geometry) return null;
+      if (!num || !toTrack) return null;
       const p = positionAt(num, trackNow());
       if (!p) return null;
-      const [xn, yn] = mapperFor(geometry)(p.x, p.y);
+      const [xn, yn] = toTrack!(p.x, p.y);
       return v.set(xn, 0, -yn);
     });
-  }, [engine, follow, geometry]);
+  }, [engine, follow, toTrack]);
 
   const applyPreset = (p: ViewPreset) => {
     setPreset(p);
@@ -232,10 +231,23 @@ function MapScene({ loaded }: { loaded: Loaded }) {
           ))}
         </div>
         <div className="flex gap-1.5">
+          <MapButton
+            onClick={() => {
+              setPreset("top");
+              engine?.controls.reset();
+            }}
+            title="Fit the whole track (or double-click the map)"
+          >
+            fit
+          </MapButton>
           <MapButton onClick={() => engine?.controls.zoomBy(-0.55)} title="Zoom in">+</MapButton>
           <MapButton onClick={() => engine?.controls.zoomBy(0.55)} title="Zoom out">−</MapButton>
         </div>
       </div>
+
+      <span className="pointer-events-none absolute right-2.5 top-2 text-[9px] uppercase tracking-[0.14em] text-zinc-600">
+        drag to move · right-drag to rotate · scroll to zoom
+      </span>
 
       {overtakeEnabled !== null && (
         <span
@@ -247,6 +259,7 @@ function MapScene({ loaded }: { loaded: Loaded }) {
           Overtake {overtakeEnabled ? "enabled" : "disabled"}
         </span>
       )}
+      {children}
     </div>
   );
 }

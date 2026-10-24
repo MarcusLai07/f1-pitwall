@@ -4,6 +4,7 @@
 import { parseUtc } from "../lib/format";
 import { ingestCarData, ingestPositions, resetBuffers } from "./buffers";
 import { apply, diff } from "./diff";
+import { bumpLaps, feedLaps, resetLaps } from "./laps";
 import { replaceTopics, setWallNow, trackNow, usePitwall } from "./store";
 import type { CarDataFrame, LiveClock, LiveState, PositionFrame } from "./types";
 
@@ -151,10 +152,12 @@ export function startReplay(rec: Recording): ReplayControls {
   let posPtr = 0;
   let carPtr = 0;
   let lastPublish = 0;
+  let lapsFed = -1;
 
   const now = () => (playing ? Math.min(end, anchorAt + (performance.now() - anchorPerf) * speed) : anchorAt);
   setWallNow(now);
   resetBuffers();
+  resetLaps();
 
   const publish = (force = false) => {
     const t = performance.now();
@@ -169,13 +172,26 @@ export function startReplay(rec: Recording): ReplayControls {
     if (i < 0 || frames[i].t > at) i = Math.max(0, lowerBound(frameTimes, at + 1) - 1);
     while (i + 1 < frames.length && frames[i + 1].t <= at) i++;
     if (i !== idx) {
+      // Lap history: replay every frame since the last one fed, or rebuild after a jump back
+      if (i < lapsFed) {
+        resetLaps();
+        lapsFed = -1;
+      }
+      let added = false;
+      for (let f = lapsFed + 1; f <= i; f++) {
+        if (f > 0 && frames[f].state.TimingData === frames[f - 1].state.TimingData) continue;
+        added = feedLaps(frames[f].state.TimingData, frames[f].state.TimingAppData, false) || added;
+      }
+      lapsFed = i;
+      if (added) bumpLaps();
       idx = i;
       replaceTopics(frames[i].state, frames[i].clock);
     }
     const tn = trackNow();
     if (seeking) {
       resetBuffers();
-      posPtr = lowerBound(rec.positionTimes, tn - 15_000);
+      // A few minutes back: enough on-track trace for a live-built track shape
+      posPtr = lowerBound(rec.positionTimes, tn - 150_000);
       carPtr = lowerBound(rec.carTimes, tn - 60_000);
     }
     const posEnd = lowerBound(rec.positionTimes, tn + LOOKAHEAD_MS);

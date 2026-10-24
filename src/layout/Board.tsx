@@ -1,55 +1,90 @@
+import { useMemo } from "react";
 import { GridLayout, getCompactor, useContainerWidth, verticalCompactor } from "react-grid-layout";
+import { usePitwall } from "../data/store";
+import { DRAWER_BAR_PX, Drawer } from "../drawer/Drawer";
 import { WIDGETS, type WidgetId } from "../widgets/registry";
-import { GRID } from "./defaults";
+import { GRID, GRID_MARGIN, telemetryRowsFor, towerRowsFor } from "./defaults";
 import { useLayout } from "./layoutStore";
 
 // Free mode: no compaction, no overlap, and a drop onto another widget is refused
 // rather than shoving it aside
 const freeCompactor = getCompactor(null, false, true);
+const PADDING = 6;
 
 export function Board() {
   const { view, items, locked, packing, setItems, remove } = useLayout();
+  const drivers = usePitwall((s) => Object.keys(s.live.DriverList ?? {}).length);
+  const selectedCount = usePitwall((s) => s.selected.length);
   const { width, containerRef, mounted } = useContainerWidth();
   const { cols, rowHeight } = GRID[view];
+  const colWidth = (width - 2 * PADDING - (cols - 1) * GRID_MARGIN) / cols;
+  const spanPx = (w: number) => w * colWidth + (w - 1) * GRID_MARGIN;
+
+  // Content-sized widgets: the tower can't grow past its last driver row, and
+  // telemetry is exactly as tall as its driver cards (width stays free)
+  const layout = useMemo(() => {
+    const towerMax = towerRowsFor(drivers || 22);
+    return items.map((it) => {
+      if (it.i === "tower") return { ...it, h: Math.min(it.h, towerMax), maxH: towerMax };
+      if (it.i === "telemetry") {
+        const h = telemetryRowsFor(spanPx(it.w) - 2, Math.max(1, selectedCount));
+        return { ...it, h, minH: h, maxH: h, resizeHandles: ["e" as const] };
+      }
+      return it;
+    });
+  }, [items, drivers, selectedCount, colWidth]); // spanPx only depends on colWidth
+
+  // The drawer sits under the timing tower's column (full width without a tower)
+  const tower = view === "window" ? layout.find((it) => it.i === "tower") : undefined;
+  const drawerLeft = tower ? PADDING + tower.x * (colWidth + GRID_MARGIN) : PADDING;
+  const drawerWidth = tower ? spanPx(tower.w) : Math.max(0, width - 2 * PADDING);
 
   return (
-    <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-      {mounted && width > 0 && (
-        <GridLayout
-          width={width}
-          layout={items}
-          gridConfig={{ cols, rowHeight, margin: [6, 6], containerPadding: [6, 6] }}
-          dragConfig={{ enabled: !locked, handle: ".widget-handle", cancel: ".widget-no-drag" }}
-          resizeConfig={{ enabled: !locked, handles: ["se", "e", "s"] }}
-          compactor={packing === "free" ? freeCompactor : verticalCompactor}
-          onLayoutChange={setItems}
-        >
-          {items.map((item) => {
-            const id = item.i as WidgetId;
-            const def = WIDGETS[id];
-            const Body = def.component;
-            return (
-              <div key={id} className="flex flex-col overflow-hidden rounded-lg border border-zinc-800 bg-background">
-                <div className="widget-handle flex h-7 shrink-0 cursor-grab items-center gap-2 border-b border-zinc-800 bg-zinc-900/70 px-2.5 active:cursor-grabbing">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{def.title}</span>
-                  {!locked && (
-                    <button
-                      className="widget-no-drag ml-auto flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                      title={`Remove ${def.title}`}
-                      onClick={() => remove(id)}
-                    >
-                      ×
-                    </button>
-                  )}
+    <div className="relative min-h-0 flex-1">
+      <div ref={containerRef} className="absolute inset-0 overflow-y-auto overflow-x-hidden">
+        {mounted && width > 0 && (
+          <GridLayout
+            width={width}
+            layout={layout}
+            gridConfig={{ cols, rowHeight, margin: [GRID_MARGIN, GRID_MARGIN], containerPadding: [PADDING, PADDING] }}
+            dragConfig={{ enabled: !locked, handle: ".widget-handle", cancel: ".widget-no-drag" }}
+            resizeConfig={{ enabled: !locked, handles: ["se", "e", "s"] }}
+            compactor={packing === "free" ? freeCompactor : verticalCompactor}
+            onLayoutChange={setItems}
+          >
+            {layout.map((item) => {
+              const id = item.i as WidgetId;
+              const def = WIDGETS[id];
+              const Body = def.component;
+              return (
+                <div key={id} className="relative overflow-hidden rounded-lg border border-zinc-800 bg-background">
+                  <div className="widget-no-drag h-full">
+                    <Body />
+                  </div>
+                  {/* Title bar stays hidden; hovering the top edge slides it down (styles.css) */}
+                  <div className="widget-hotzone absolute inset-x-0 top-0 z-20 h-3" />
+                  <div className="widget-handle widget-header absolute inset-x-0 top-0 z-30 flex h-8 cursor-grab items-center gap-2 border-b border-zinc-700 bg-zinc-900/95 px-3 shadow-lg shadow-black/40 backdrop-blur active:cursor-grabbing">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-300">{def.title}</span>
+                    {!locked && <span className="text-[10px] text-zinc-500">drag to move</span>}
+                    {!locked && (
+                      <button
+                        className="widget-no-drag ml-auto flex h-6 w-6 items-center justify-center rounded text-base text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                        title={`Remove ${def.title}`}
+                        onClick={() => remove(id)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="widget-no-drag min-h-0 flex-1">
-                  <Body />
-                </div>
-              </div>
-            );
-          })}
-        </GridLayout>
-      )}
+              );
+            })}
+          </GridLayout>
+        )}
+        {/* Room to scroll the grid clear of the drawer bar */}
+        <div style={{ height: DRAWER_BAR_PX }} />
+      </div>
+      {mounted && width > 0 && <Drawer left={drawerLeft} width={drawerWidth} />}
     </div>
   );
 }

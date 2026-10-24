@@ -4,3 +4,4 @@ recordings/*
 !recordings/.gitkeep
 *.log
 .DS_Store
+public/ort/

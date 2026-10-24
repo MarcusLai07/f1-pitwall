@@ -2,6 +2,7 @@
 // Kept outside React: the map reads them every animation frame and the telemetry
 // widgets on a ticker, interpolating at the current track time.
 
+import type { TrackSample } from "../circuit3d/liveTrack";
 import { parseUtc } from "../lib/format";
 import type { CarDataFrame, PositionFrame } from "./types";
 
@@ -23,15 +24,19 @@ export interface CarSample {
 
 const POS_KEEP_MS = 20_000;
 const CAR_KEEP_MS = 90_000;
+// Longer on-track traces (meters) for building a track shape from live positions
+const TRACE_KEEP_MS = 300_000;
 
 const positions = new Map<string, PosSample[]>();
 const cars = new Map<string, CarSample[]>();
+const traces = new Map<string, TrackSample[]>();
 let lastPosT = -Infinity;
 let lastCarT = -Infinity;
 
 export function resetBuffers() {
   positions.clear();
   cars.clear();
+  traces.clear();
   lastPosT = -Infinity;
   lastCarT = -Infinity;
 }
@@ -46,9 +51,15 @@ export function ingestPositions(frames: PositionFrame[] | undefined) {
       let list = positions.get(num);
       if (!list) positions.set(num, (list = []));
       list.push({ t, x: e.X, y: e.Y, status: e.Status });
+      if (e.Status === "OnTrack" && (e.X || e.Y)) {
+        let trace = traces.get(num);
+        if (!trace) traces.set(num, (trace = []));
+        trace.push({ t, x: e.X / 10, y: e.Y / 10, z: e.Z / 10 });
+      }
     }
   }
   trim(positions, lastPosT - POS_KEEP_MS);
+  trim(traces, lastPosT - TRACE_KEEP_MS);
 }
 
 export function ingestCarData(frames: CarDataFrame[] | undefined) {
@@ -66,8 +77,9 @@ export function ingestCarData(frames: CarDataFrame[] | undefined) {
         rpm: ch["0"] ?? 0,
         speed: ch["2"] ?? 0,
         gear: ch["3"] ?? 0,
-        throttle: Math.min(100, ch["4"] ?? 0),
-        brake: ch["5"] ? 100 : 0, // brake is on/off in the feed (0 or 100)
+        // 104 on both pedals means no reading (car in the garage), not full throttle and brake
+        throttle: (ch["4"] ?? 0) > 100 ? 0 : ch["4"] ?? 0,
+        brake: (ch["5"] ?? 0) > 100 ? 0 : ch["5"] ? 100 : 0, // otherwise on/off (0 or 100)
       });
     }
   }
@@ -129,6 +141,6 @@ export function carHistory(num: string, from: number, to: number): CarSample[] {
   return list.slice(start, end + 1);
 }
 
-export function positionNumbers(): string[] {
-  return [...positions.keys()];
+export function trackTraces(): ReadonlyMap<string, TrackSample[]> {
+  return traces;
 }
