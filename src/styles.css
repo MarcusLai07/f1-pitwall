@@ -1,0 +1,47 @@
+@import "tailwindcss";
+@import "@fontsource/titillium-web/400.css";
+@import "@fontsource/titillium-web/600.css";
+@import "@fontsource/titillium-web/700.css";
+@import "@fontsource/titillium-web/900.css";
+@import "react-grid-layout/css/styles.css";
+
+/* Dark only, same tokens as f1-dashboard's globals.css */
+@theme {
+  --color-background: #0a0a0b;
+  --color-foreground: #ffffff;
+  --color-secondary: #1c1c1f;
+  --color-muted: #1c1c1f;
+  --color-muted-foreground: #a1a1aa;
+  --color-accent: #1c1c1f;
+  --color-border: #27272a;
+  --color-f1-red: #e10600;
+  --color-f1-green: #22c55e;
+  --font-f1: "Titillium Web", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Titillium Web", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--color-background);
+  overflow: hidden;
+}
+
+/* Grid: quieter placeholder and resize handles that fit the dark theme */
+.react-grid-item.react-grid-placeholder {
+  background: var(--color-f1-red);
+  opacity: 0.15;
+  border-radius: 8px;
+}
+.react-grid-item > .react-resizable-handle::after {
+  border-color: #52525b;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
