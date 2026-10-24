@@ -209,9 +209,49 @@ function SourceMenu() {
             ))}
           </div>
           <p className="mt-1 text-[10px] text-zinc-500">F1's feed runs ahead of most video streams. Raise the delay until the timing matches what you're watching.</p>
+          {via === "f1" && <FeedCheck />}
         </>
       )}
       {error && <p className="mt-1.5 text-[10px] text-amber-400">{error}</p>}
+    </div>
+  );
+}
+
+// What each part of the board needs from F1's feed
+const FEED_PARTS: [string, string][] = [
+  ["TimingData", "Timing"],
+  ["Position", "Cars on the map"],
+  ["CarData", "Telemetry"],
+  ["TeamRadio", "Team radio"],
+  ["RaceControlMessages", "Race control"],
+];
+
+/** Which of those F1 is actually sending to this connection */
+function FeedCheck() {
+  const feed = usePitwall((s) => s.feed);
+  const product = useF1Account((s) => s.product);
+  if (!feed) return null;
+  const missing = FEED_PARTS.filter(([t]) => !feed.topics.includes(t)).map(([, label]) => label);
+  const carsMissing = !feed.topics.includes("Position") || !feed.topics.includes("CarData");
+  return (
+    <div className="mt-2 border-t border-zinc-800 pt-2">
+      <p className="text-[9px] uppercase tracking-wider text-zinc-500">F1 is sending</p>
+      <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
+        {FEED_PARTS.map(([topic, label]) => {
+          const ok = feed.topics.includes(topic);
+          return (
+            <span key={topic} className={ok ? "text-zinc-200" : "text-zinc-500"}>
+              <span className={ok ? "text-green-400" : "text-zinc-600"}>{ok ? "✓" : "–"}</span> {label}
+            </span>
+          );
+        })}
+      </div>
+      {feed.withToken && carsMissing && (
+        <p className="mt-1.5 text-[10px] text-amber-300/90">
+          F1 hasn't sent {missing.filter((m) => m === "Cars on the map" || m === "Telemetry").join(" or ").toLowerCase()} to your login
+          {product ? ` (${product})` : ""} so far. Outside a running session it may simply have nothing to send.
+        </p>
+      )}
     </div>
   );
 }

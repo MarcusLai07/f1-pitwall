@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 // One shared interval per rate, however many components tick on it.
 const tickers = new Map<number, { count: number; listeners: Set<() => void>; id?: ReturnType<typeof setInterval> }>();
@@ -31,12 +31,23 @@ export function useTicker(hz: number): number {
   );
 }
 
-/** Element size via ResizeObserver */
+/**
+ * Size of an element, kept current. The ref follows the element it's attached to, so
+ * a component that swaps its root (e.g. telemetry's one-car vs. several-car layouts)
+ * keeps being measured; `ref.current` is that element.
+ */
 export function useSize<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
+  const [el, setEl] = useState<T | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const ref = useMemo(() => {
+    const attach = ((node: T | null) => {
+      attach.current = node;
+      setEl(node);
+    }) as ((node: T | null) => void) & { current: T | null };
+    attach.current = null;
+    return attach;
+  }, []);
   useEffect(() => {
-    const el = ref.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
       const width = Math.round(entry.contentRect.width);
@@ -45,6 +56,6 @@ export function useSize<T extends HTMLElement>() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [el]);
   return [ref, size] as const;
 }

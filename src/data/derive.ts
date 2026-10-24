@@ -55,6 +55,11 @@ export function buildRows(live: LiveState): DriverRow[] {
   const stats = live.TimingStats?.Lines ?? {};
   const kind = sessionKind(live.SessionInfo);
   const part = live.TimingData?.SessionPart ?? 0;
+  // F1 times a lap from one line crossing to the next, so a car that sat in the garage
+  // gets a "lap" like 21:43.737. Anything over twice the session's fastest lap (five
+  // minutes before there is one) is garage time, not a lap.
+  const fastest = Math.min(...Object.values(lines).map((l) => lapSeconds(l.BestLapTime?.Value) ?? Infinity));
+  const maxLap = Number.isFinite(fastest) ? fastest * 2 : 300;
 
   const rows: DriverRow[] = [];
   for (const [num, line] of Object.entries(lines)) {
@@ -100,7 +105,7 @@ export function buildRows(live: LiveState): DriverRow[] {
           : q?.TimeDiffToPositionAhead ?? line.TimeDiffToPositionAhead ?? "",
       catching: !!line.IntervalToPositionAhead?.Catching,
       lastLap: {
-        value: line.LastLapTime?.Value ?? "",
+        value: (lapSeconds(line.LastLapTime?.Value) ?? 0) > maxLap ? "" : line.LastLapTime?.Value ?? "",
         pb: !!line.LastLapTime?.PersonalFastest,
         ob: !!line.LastLapTime?.OverallFastest,
       },

@@ -37,7 +37,7 @@ Straight from F1, in your browser. Pit Wall has no server.
 
 - **Live:** F1's live timing feed. Without signing in you get F1's free feed: timing, sectors and race control. **Sign in to F1 TV** (top right of **Sessions**) to add cars on the map, telemetry and team radio. F1's feed runs ahead of most video streams, so open the source menu (the **Live · F1** chip) and raise **Delay** until the timing matches what you're watching.
 - **Past sessions:** **Sessions → Replay** loads any past session's timing, track positions, telemetry and team radio from F1's timing archive (the one FastF1 uses). It needs the F1 TV sign-in. There's no video; scrub with the replay bar.
-- **Signing in:** click **Sign in to F1 TV** at the top right of **Sessions**. If this browser is already signed in to formula1.com, that's it; otherwise formula1.com's own sign-in page opens in a window, and Pit Wall picks the login up and closes that window once you're in. Your password only ever goes to formula1.com; Pit Wall uses the site's sign-in cookie and sends its token only to F1's servers. It lasts a few days, and visiting formula1.com renews it. Click your plan's name (e.g. **F1 TV Pro ▾**) to **Sign out of Pit Wall**; formula1.com stays signed in.
+- **Signing in:** click **Sign in to F1 TV** at the top right of **Sessions** and enter your F1 account's email and password. Pit Wall signs in to F1's own sign-in service (`id.formula1.com`) the way [FastF1](https://docs.fastf1.dev) does: your email and password go only to F1, and Pit Wall keeps just the F1 TV token F1 gives back (in the extension's own storage), never the password. If this browser is already signed in to F1, it may not even ask. The token lasts a few days; sign in again when Sessions says it ran out. Click your plan's name (e.g. **F1 TV Pro ▾**) to **Sign out of Pit Wall**, which deletes the token. (formula1.com used to leave the token in a cookie; Pit Wall still uses one if it finds it.)
 - **Video:** Pit Wall shows data only. Watch the session wherever you normally do and set the **Delay** to match it. It doesn't depend on F1 TV's video, so it also works where F1 TV blocks live streams or current-season replays.
 
 ## Use
@@ -87,7 +87,7 @@ Code map:
 ## Notes
 
 - F1's live feed and archive are unofficial interfaces and could change without notice.
-- Permissions: `cookies` and `*.formula1.com` to read your F1 TV sign-in and reach F1's live feed and archive (team radio clips come from there too), `api.openf1.org` for the schedule.
-- Your F1 TV token stays in your browser. Pit Wall only sends it to F1's own live timing and archive at `livetiming.formula1.com`.
+- Permissions: `*.formula1.com` to sign in to F1 and reach its live feed and archive (team radio clips come from there too), `cookies` to pick up a formula1.com login left in a cookie, `api.openf1.org` for the schedule.
+- Your F1 TV token stays in your browser. Pit Wall only sends it to F1's own live timing and archive at `livetiming.formula1.com`; your password only ever goes to `id.formula1.com`.
 - Circuits without a stored shape (e.g. Madring) or with a different layout show a map after about one lap of running, drawn from live positions (no sector colours or turn numbers there).
 - For personal use. Don't redistribute the timing data.

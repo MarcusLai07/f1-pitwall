@@ -9,11 +9,15 @@ import { trackNow, usePitwall } from "../data/store";
 import { buildRows } from "../data/derive";
 import { useFreeFeed } from "../data/liveSettings";
 import { cn, isLightColor } from "../lib/format";
-import { telemetryColumns } from "../layout/defaults";
+import { TELEMETRY_TWO_COLUMN_PX, telemetryColumns } from "../layout/defaults";
 import { useLayout } from "../layout/layoutStore";
 import { useSize, useTicker } from "../ui/hooks";
 
 const TRACE_MS = 20_000;
+
+// Narrowest a telemetry card gets (two across in the narrowest two-column widget);
+// past that, cards open out to the left instead
+const MIN_CARD_PX = (TELEMETRY_TWO_COLUMN_PX - 6 - 14) / 2;
 
 export function Telemetry() {
   useTicker(8);
@@ -29,14 +33,21 @@ export function Telemetry() {
   const GAP = 14;
 
   if (isWindow && nums.length && !freeFeed) {
-    // Same card width as the two-across layout, however many cars are shown
-    const cardW = columns === 2 ? (size.width - 6 - GAP) / 2 : size.width - 6;
+    // With more than one car every card is two-across width, whatever the widget's own
+    // width (a narrow widget used to make them full width, and the extras with them).
+    // Cards that don't fit open out to the left at the same size.
+    const inner = size.width - 6;
+    const several = nums.length > 1;
+    const half = (inner - GAP) / 2;
+    const cardW = several ? Math.max(MIN_CARD_PX, half) : inner;
+    // Two inside when they fit at two-across width; in a widget too narrow for that, one
+    const inside = several && half >= MIN_CARD_PX ? 2 : 1;
     return (
       <div ref={ref} className="relative h-full">
         <div className="absolute inset-y-[3px] right-[3px] flex flex-row-reverse" style={{ gap: GAP }}>
           {nums.map((num, i) => (
             <div key={num} className="h-full" style={{ width: cardW }}>
-              <DriverCard num={num} at={at} isLeaderFallback={!selected.length} compact={columns === 2} floating={i >= columns} />
+              <DriverCard num={num} at={at} isLeaderFallback={!selected.length} compact={several} floating={i >= inside} />
             </div>
           ))}
         </div>

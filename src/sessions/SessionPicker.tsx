@@ -8,7 +8,17 @@ import { usePitwall } from "../data/store";
 import { cn } from "../lib/format";
 import { useTicker } from "../ui/hooks";
 import { loadSeason, sessionState, type Meeting, type ScheduleSource, type Session } from "./catalog";
-import { signIn, signOut, useF1Account } from "./f1account";
+import {
+  beginSignIn,
+  checkF1Account,
+  openSignInForm,
+  signInWithPassword,
+  signOut,
+  testLogin,
+  useF1Account,
+  type LoginTest,
+  type TokenCheck,
+} from "./f1account";
 
 const FIRST_YEAR = 2023; // OpenF1's history starts here
 const day = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" });
@@ -189,6 +199,7 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
 
       <div className="shrink-0 border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-400">
         {note && <p className={cn("mb-1.5 font-semibold", note.bad ? "text-amber-400" : "text-green-400")}>{note.text}</p>}
+        <AccountPanel />
         <div className="flex items-center gap-3">
           <span className="text-zinc-500">Replays and live timing come straight from F1 · no video</span>
           <span className="ml-auto text-zinc-500">Times are yours</span>
@@ -199,46 +210,201 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
 }
 
 const until = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const ranOut = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+const VERDICT: Record<TokenCheck["verdict"], string> = {
+  accepted: "accepted by F1",
+  unverified: "couldn't check with F1",
+  expired: "expired",
+  inactive: "subscription not active",
+  refused: "refused by F1",
+};
+
+/** Each login Pit Wall found (its own sign-in, formula1.com cookies), and what F1 made of it */
+function TokenChecks({ checks }: { checks: TokenCheck[] }) {
+  if (!checks.length) return null;
+  return (
+    <ul className="mt-1.5 space-y-0.5 text-[10px]">
+      {checks.map((c, i) => (
+        <li key={i} className="flex gap-1.5">
+          <span className={c.verdict === "accepted" ? "text-green-400" : c.verdict === "unverified" ? "text-zinc-400" : "text-amber-400"}>
+            {c.verdict === "accepted" ? "✓" : c.verdict === "unverified" ? "?" : "✗"}
+          </span>
+          <span className="font-mono text-zinc-300">{c.cookie}</span>
+          <span className="text-zinc-500">
+            {VERDICT[c.verdict]}
+            {c.verdict === "expired" && c.expires ? ` ${ranOut.format(c.expires)}` : ""}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const message = (err: unknown) =>
+  err instanceof TypeError ? "Couldn't reach F1's sign-in service" : err instanceof Error ? err.message : String(err);
+
+const field = "h-7 w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 text-[12px] text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none";
+const smallButton = "rounded border border-zinc-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-200 hover:border-zinc-500";
+
+/** The sign-in form, or why the login Pit Wall has doesn't work */
+function AccountPanel() {
+  const { state, expires, status, scan, formOpen } = useF1Account();
+  const [phase, setPhase] = useState<"starting" | "password" | "sending">("starting");
+  const [error, setError] = useState<string | null>(null);
+  const [details, setDetails] = useState(false);
+  const [test, setTest] = useState<LoginTest | null | "running">(null);
+
+  // Opening the form starts F1's sign-in; a browser already signed in to F1 may finish right here
+  useEffect(() => {
+    if (!formOpen) return;
+    let alive = true;
+    setPhase("starting");
+    setError(null);
+    beginSignIn()
+      .then((r) => alive && r === "password" && setPhase("password"))
+      .catch((err) => {
+        if (!alive) return;
+        setError(message(err));
+        setPhase("password");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [formOpen]);
+
+  if (state === "signed-in" || state === "unavailable") return null;
+  const why =
+    state === "expired"
+      ? `Your F1 TV sign-in ran out${expires ? ` on ${ranOut.format(expires)}` : ""}. Sign in again to carry on.`
+      : state === "refused"
+        ? "F1 refused the F1 TV login Pit Wall found. Sign in to get a fresh one."
+        : state === "no-subscription"
+          ? `F1 says this account's F1 TV subscription is ${status ?? "not active"}.`
+          : null;
+  if (!formOpen && !why) return null;
+
+  return (
+    <div className="mb-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-2.5 text-[11px] leading-snug text-zinc-300">
+      {why && <p className="mb-1.5">{why}</p>}
+      {formOpen ? (
+        phase === "starting" ? (
+          <p className="text-zinc-400">Contacting F1…</p>
+        ) : (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const data = new FormData(form);
+              setPhase("sending");
+              setError(null);
+              try {
+                await signInWithPassword(String(data.get("email") ?? "").trim(), String(data.get("password") ?? ""));
+                form.reset();
+              } catch (err) {
+                const password = form.elements.namedItem("password") as HTMLInputElement | null;
+                if (password) password.value = "";
+                setError(message(err));
+                setPhase("password");
+              }
+            }}
+          >
+            <p className="mb-1.5 font-semibold text-zinc-100">Sign in with your F1 account</p>
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+              <input name="email" type="email" autoComplete="username" required placeholder="Email" className={field} />
+              <input name="password" type="password" autoComplete="current-password" required placeholder="Password" className={field} />
+              <button
+                type="submit"
+                disabled={phase === "sending"}
+                className="h-7 rounded-md bg-f1-red px-3 text-[10px] font-bold uppercase tracking-wider text-white hover:brightness-110 disabled:opacity-60"
+              >
+                {phase === "sending" ? "Signing in…" : "Sign in"}
+              </button>
+            </div>
+            <p className="mt-1.5 text-[10px] text-zinc-500">
+              Your email and password go straight to F1's sign-in service (id.formula1.com), the way FastF1 signs in. Pit Wall keeps only the
+              F1 TV token it gets back, never your password.{" "}
+              <button type="button" onClick={() => openSignInForm(false)} className="text-zinc-300 underline-offset-2 hover:underline">
+                Cancel
+              </button>
+            </p>
+          </form>
+        )
+      ) : (
+        <button onClick={() => openSignInForm()} className={smallButton}>
+          Sign in
+        </button>
+      )}
+      {error && <p className="mt-1.5 font-semibold text-amber-300">{error}</p>}
+      {!!scan?.checks.length && (
+        <button onClick={() => setDetails((d) => !d)} className="mt-1.5 text-[10px] text-zinc-500 hover:text-zinc-300">
+          {details ? "Hide details" : "Details"}
+        </button>
+      )}
+      {details && scan && (
+        <div>
+          <TokenChecks checks={scan.checks} />
+          <div className="mt-1.5 flex gap-1.5">
+            <button onClick={() => checkF1Account().catch(() => {})} className={smallButton}>
+              Check again
+            </button>
+            <button
+              onClick={async () => {
+                setTest("running");
+                setTest(await testLogin().catch(() => null));
+              }}
+              className={smallButton}
+            >
+              {test === "running" ? "Testing…" : "Test with F1"}
+            </button>
+          </div>
+          {test && test !== "running" && (
+            <div className="mt-2 rounded border border-zinc-800 bg-zinc-950/70 p-2 font-mono text-[10px] leading-relaxed text-zinc-400">
+              <p className="text-zinc-300">login from "{test.cookie}"</p>
+              {test.facts.map(([k, v]) => (
+                <p key={k}>
+                  {k}: <span className="text-zinc-200">{v}</span>
+                </p>
+              ))}
+              <p className="mt-1 text-zinc-300">F1 answered</p>
+              {test.answers.map(([k, v]) => (
+                <p key={k}>
+                  {k}: <span className={/^2\d\d/.test(v) ? "text-green-400" : "text-amber-300"}>{v}</span>
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The F1 TV account Pit Wall uses: sign in, see whose it is, sign out */
 function AccountChip() {
-  const { state, product, expires, waiting, problem } = useF1Account();
+  const { state, product, expires, scan, formOpen } = useF1Account();
   const [open, setOpen] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
   const chip = "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider";
   if (state === "unavailable")
     return (
-      <span className={cn(chip, "border border-zinc-800 text-zinc-500")} title="The dev page can't read your formula1.com login; the installed extension can">
+      <span className={cn(chip, "border border-zinc-800 text-zinc-500")} title="The dev page can't reach F1's sign-in; the installed extension can">
         F1 TV · extension only
       </span>
-    );
-  if (waiting && state !== "signed-in")
-    return (
-      <button
-        onClick={() => signIn().catch(() => {})}
-        className={cn(chip, "flex items-center gap-1.5 border border-sky-500/50 text-sky-300 hover:bg-sky-500/10")}
-        title="Sign in on formula1.com in the window that opened; Pit Wall picks it up by itself. Click to bring that window back."
-      >
-        <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400" />
-        Finish signing in in the F1 window…
-      </button>
     );
   if (state !== "signed-in")
     return (
       <button
-        onClick={() => signIn().catch((err) => setFailed(err instanceof Error ? err.message : String(err)))}
+        onClick={() => openSignInForm(!formOpen)}
         className={cn(chip, state === "signed-out" ? "bg-f1-red text-white hover:brightness-110" : "border border-amber-500/60 text-amber-300 hover:bg-amber-500/10")}
-        title={
-          failed ??
-          problem ??
-          (state === "signed-out"
-            ? "Uses your formula1.com login in this browser (opens its sign-in page if you aren't signed in)"
-            : state === "expired"
-              ? "Your F1 TV sign-in ran out; signing in on formula1.com renews it"
-              : "This F1 account has no active F1 TV subscription")
-        }
+        title="Sign in with your F1 account (for cars on the map, telemetry, team radio and replays)"
       >
-        {state === "signed-out" ? "Sign in to F1 TV" : state === "expired" ? "Renew F1 TV sign-in" : "No F1 TV subscription"}
+        {state === "signed-out"
+          ? "Sign in to F1 TV"
+          : state === "expired"
+            ? "F1 TV sign-in expired"
+            : state === "refused"
+              ? "F1 refused this login"
+              : "No F1 TV subscription"}
       </button>
     );
   return (
@@ -252,9 +418,11 @@ function AccountChip() {
         <div className="absolute right-0 top-7 z-10 w-64 rounded-lg border border-zinc-700 bg-zinc-950 p-2.5 text-[11px] leading-snug text-zinc-300 shadow-xl">
           <p className="font-semibold text-zinc-100">Signed in to F1 TV</p>
           <p className="mt-1 text-zinc-400">
-            With your formula1.com login in this browser. Replays and live timing come straight from F1, with telemetry and team radio.
+            {scan?.from === "Pit Wall sign-in" ? "Signed in here, in Pit Wall." : "Using the F1 TV login in this browser's formula1.com cookies."} Replays and live
+            timing come straight from F1, with telemetry and team radio.
           </p>
-          {expires && <p className="mt-1 text-zinc-500">Good until {until.format(expires)}; visiting formula1.com renews it.</p>}
+          {expires && <p className="mt-1 text-zinc-500">Good until {until.format(expires)}.</p>}
+          {scan && <TokenChecks checks={scan.checks} />}
           <button
             onClick={() => {
               setOpen(false);
@@ -264,7 +432,6 @@ function AccountChip() {
           >
             Sign out of Pit Wall
           </button>
-          <p className="mt-1 text-[10px] text-zinc-500">formula1.com stays signed in.</p>
         </div>
       )}
     </div>

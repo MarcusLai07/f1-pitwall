@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pit Wall",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "One rearrangeable window for F1 timing, map and telemetry, live and past sessions, straight from F1 with your F1 TV sign-in.",
   "icons": {
     "16": "icons/icon-16.png",

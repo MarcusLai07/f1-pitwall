@@ -5,7 +5,7 @@
 // back by the delay setting so the board can match the stream you're watching.
 
 import { parseUtc } from "../lib/format";
-import { f1Token, watchF1Account } from "../sessions/f1account";
+import { f1Token, reportRefused, watchF1Account } from "../sessions/f1account";
 import { inflate, merge } from "./archive";
 import { ingestCarData, ingestPositions, resetBuffers } from "./buffers";
 import { feedLaps, resetLaps } from "./laps";
@@ -64,7 +64,16 @@ export function startF1Live(delayMs: () => number): () => void {
   resetLaps();
   resetPits();
   setWallNow(() => Date.now());
-  usePitwall.setState({ source: "live", via: "f1", status: "connecting", error: null, replay: null, live: {}, clock });
+  usePitwall.setState({ source: "live", via: "f1", status: "connecting", error: null, replay: null, live: {}, clock, feed: null });
+  // Which topics F1 actually sends (some only come with an F1 TV login)
+  const seen = new Set<string>();
+  let withToken = false;
+  const noteTopic = (topic: string) => {
+    const name = topic.replace(/\.z$/, "");
+    if (seen.has(name)) return;
+    seen.add(name);
+    usePitwall.setState({ feed: { topics: [...seen], withToken } });
+  };
 
   const serverNow = () => Date.now() + skew;
   const noteSkew = (ts: string | undefined) => {
@@ -138,6 +147,7 @@ export function startF1Live(delayMs: () => number): () => void {
   };
 
   const take = async (topic: string, data: unknown, at: number, replace: boolean) => {
+    if (data != null) noteTopic(topic);
     if (topic.endsWith(".z")) {
       if (typeof data !== "string") return;
       const decoded = JSON.parse(await inflate(data));
@@ -161,12 +171,15 @@ export function startF1Live(delayMs: () => number): () => void {
       signal: abort.signal,
     });
     let neg = await fetch(`${HUB}/negotiate?negotiateVersion=1`, { method: "POST", ...opts({ "Content-Type": "application/json" }) });
-    if (neg.status === 401 && token) {
+    if (neg.status >= 400 && neg.status < 500 && token) {
       // F1 refused the token: carry on with the free feed
+      if (neg.status === 401) reportRefused(token);
       token = null;
       neg = await fetch(`${HUB}/negotiate?negotiateVersion=1`, { method: "POST", ...opts({ "Content-Type": "application/json" }) });
     }
     if (!neg.ok) throw new Error(`F1 live timing answered ${neg.status}`);
+    withToken = !!token;
+    usePitwall.setState({ feed: { topics: [...seen], withToken } });
     const { connectionToken } = (await neg.json()) as { connectionToken: string };
     const url = `${HUB}?id=${encodeURIComponent(connectionToken)}`;
     const send = (msg: object) =>

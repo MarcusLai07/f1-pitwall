@@ -29,6 +29,8 @@ interface PitwallStore {
   clock: LiveClock | null;
   selected: string[]; // racing numbers, most recent first (up to MAX_SELECTED)
   replay: ReplayInfo | null;
+  /** Live from F1: the topics it has actually sent, and whether the F1 TV token went with the request */
+  feed: { topics: string[]; withToken: boolean } | null;
   /** Bumped on a replay seek or source switch: jumps that aren't events (no banners) */
   resync: number;
   toggleSelected: (num: string) => void;
@@ -43,6 +45,7 @@ export const usePitwall = create<PitwallStore>((set) => ({
   clock: null,
   selected: [],
   replay: null,
+  feed: null,
   resync: 0,
   toggleSelected: (num) =>
     set((s) => ({

@@ -5,7 +5,7 @@
 // the .z topics). This turns them into a Recording the replay engine plays.
 
 import { parseGmtOffset, parseUtc } from "../lib/format";
-import { f1Token } from "../sessions/f1account";
+import { f1Token, reportRefused } from "../sessions/f1account";
 import type { Recording } from "./replay";
 import type { CarDataFrame, LiveState, PositionFrame } from "./types";
 
@@ -18,7 +18,10 @@ export class ArchiveAuthError extends Error {}
 export async function archiveFetch(url: string): Promise<Response> {
   const token = f1Token();
   const res = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
-  if (res.status === 401) throw new ArchiveAuthError(token ? "F1 TV refused the sign-in" : "Sign in to F1 TV first");
+  if (res.status === 401) {
+    if (token) reportRefused(token);
+    throw new ArchiveAuthError(token ? "F1 TV refused the sign-in" : "Sign in to F1 TV first");
+  }
   return res;
 }
 
