@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ARCHIVE_BASE, loadArchive } from "./data/archive";
 import { sessionKind } from "./data/derive";
 import { startLive } from "./data/multiviewer";
-import { loadRecording, startReplay, type ReplayControls } from "./data/replay";
+import { loadRecording, startReplay, type Recording, type ReplayControls } from "./data/replay";
 import { usePitwall } from "./data/store";
 import { Board } from "./layout/Board";
 import { useLayout } from "./layout/layoutStore";
 import type { View } from "./layout/defaults";
+import { watchF1Account } from "./sessions/f1account";
 import { ReplayBar } from "./ui/ReplayBar";
 import { scaleFor, setCurrentScale, useUiScale } from "./ui/scale";
 import { TopBar } from "./ui/TopBar";
@@ -51,13 +53,14 @@ export function App() {
     stopRef.current = startLive();
   }, []);
 
-  const openRecording = useCallback(
-    async (src: File | string) => {
+  useEffect(watchF1Account, []);
+
+  const openReplay = useCallback(
+    async (name: string, load: (onProgress: (fraction: number) => void) => Promise<Recording>) => {
       const loadId = ++loadIdRef.current;
       stopRef.current?.();
       stopRef.current = null;
       setControls(null);
-      const name = typeof src === "string" ? src.split("/").pop() ?? src : src.name;
       usePitwall.setState({
         source: "replay",
         status: "loading",
@@ -67,7 +70,7 @@ export function App() {
         replay: { name, start: 0, end: 0, at: 0, playing: false, speed: 1, loadProgress: 0 },
       });
       try {
-        const rec = await loadRecording(src, (p) => {
+        const rec = await load((p) => {
           if (loadId === loadIdRef.current) usePitwall.setState((s) => ({ replay: s.replay && { ...s.replay, loadProgress: p } }));
         });
         if (loadId !== loadIdRef.current) return;
@@ -82,16 +85,32 @@ export function App() {
     []
   );
 
+  const openRecording = useCallback(
+    (src: File | string) =>
+      openReplay(typeof src === "string" ? src.split("/").pop() ?? src : src.name, (p) => loadRecording(src, p)),
+    [openReplay]
+  );
+
+  /** A past session from F1's timing archive, by its folder path */
+  const openArchive = useCallback(
+    (path: string, name: string, base = ARCHIVE_BASE) => openReplay(name, (p) => loadArchive(path, p, base)),
+    [openReplay]
+  );
+
   useEffect(() => {
-    const replay = new URLSearchParams(location.search).get("replay");
+    const params = new URLSearchParams(location.search);
+    const replay = params.get("replay");
+    const archive = params.get("archive");
     if (replay) openRecording(replay);
+    // Dev: ?archive=<session path>&archiveBase=/recordings/archive/ plays a saved copy
+    else if (archive) openArchive(archive, archive, (import.meta.env.DEV && params.get("archiveBase")) || ARCHIVE_BASE);
     else goLive();
     return () => {
       loadIdRef.current++;
       stopRef.current?.();
       stopRef.current = null;
     };
-  }, [goLive, openRecording]);
+  }, [goLive, openRecording, openArchive]);
 
   // Space toggles replay playback
   useEffect(() => {
@@ -111,7 +130,7 @@ export function App() {
       className="flex flex-col bg-background text-foreground"
       style={{ zoom: scale, width: viewport.w / scale, height: viewport.h / scale }}
     >
-      <TopBar onGoLive={goLive} onOpenRecording={openRecording} />
+      <TopBar onGoLive={goLive} onOpenRecording={openRecording} onOpenArchive={openArchive} />
       {layoutReady && <Board />}
       {controls && <ReplayBar controls={controls} />}
     </div>

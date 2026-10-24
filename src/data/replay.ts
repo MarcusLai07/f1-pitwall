@@ -1,5 +1,6 @@
-// Replay source: plays back a recording made by scripts/record.mjs (one MultiViewer
-// state per line, gzip NDJSON) through the same store and buffers as live mode.
+// Replay source: plays back a recording through the same store and buffers as live
+// mode. Recordings come from scripts/record.mjs (one MultiViewer state per line, gzip
+// NDJSON) or from F1's timing archive (archive.ts).
 
 import { parseUtc } from "../lib/format";
 import { ingestCarData, ingestPositions, resetBuffers } from "./buffers";
@@ -15,19 +16,21 @@ interface RecordedLine {
   f1LiveTimingClock: { paused: boolean; systemTime: string; trackTime: string } | null;
 }
 
-interface Frame {
-  t: number;
-  clock: LiveClock | null;
-  state: LiveState;
-}
-
 export interface Recording {
   name: string;
-  frames: Frame[];
-  positions: PositionFrame[];
+  /** Frame times, ms (wall time of the recording, or track time for the archive) */
+  times: number[];
+  /** MultiViewer's clock at frame i, when recorded */
+  clockAt: (i: number) => LiveClock | null;
+  /** All topics except Position/CarData at frame i; unchanged topics keep their reference */
+  stateAt: (i: number) => LiveState;
   positionTimes: number[];
-  carData: CarDataFrame[];
+  /** Position frames [from, to) by index into positionTimes */
+  positionsBetween: (from: number, to: number) => PositionFrame[];
   carTimes: number[];
+  carDataBetween: (from: number, to: number) => CarDataFrame[];
+  /** Where playback starts, if not at the first frame */
+  startAt?: number;
 }
 
 export async function loadRecording(
@@ -64,7 +67,13 @@ export async function loadRecording(
     : counted;
   const text = bytes.pipeThrough(new TextDecoderStream() as unknown as BytePair<string>);
 
-  const rec: Recording = { name, frames: [], positions: [], positionTimes: [], carData: [], carTimes: [] };
+  const times: number[] = [];
+  const clocks: (LiveClock | null)[] = [];
+  const states: LiveState[] = [];
+  const positions: PositionFrame[] = [];
+  const positionTimes: number[] = [];
+  const carData: CarDataFrame[] = [];
+  const carTimes: number[] = [];
   let prevRaw: LiveState | undefined;
   let state: LiveState = {};
 
@@ -75,16 +84,16 @@ export async function loadRecording(
     if (!raw) return;
     for (const f of raw.Position?.Position ?? []) {
       const t = parseUtc(f.Timestamp);
-      if (t > (rec.positionTimes.at(-1) ?? -Infinity)) {
-        rec.positions.push(f);
-        rec.positionTimes.push(t);
+      if (t > (positionTimes.at(-1) ?? -Infinity)) {
+        positions.push(f);
+        positionTimes.push(t);
       }
     }
     for (const f of raw.CarData?.Entries ?? []) {
       const t = parseUtc(f.Utc);
-      if (t > (rec.carTimes.at(-1) ?? -Infinity)) {
-        rec.carData.push(f);
-        rec.carTimes.push(t);
+      if (t > (carTimes.at(-1) ?? -Infinity)) {
+        carData.push(f);
+        carTimes.push(t);
       }
     }
     delete raw.Position;
@@ -92,11 +101,9 @@ export async function loadRecording(
     state = apply(state, diff(prevRaw, raw));
     prevRaw = raw;
     const c = obj.f1LiveTimingClock;
-    rec.frames.push({
-      t: obj.t,
-      clock: c ? { paused: c.paused, systemTime: Number(c.systemTime), trackTime: Number(c.trackTime) } : null,
-      state,
-    });
+    times.push(obj.t);
+    clocks.push(c ? { paused: c.paused, systemTime: Number(c.systemTime), trackTime: Number(c.trackTime) } : null);
+    states.push(state);
   };
 
   const reader = text.getReader();
@@ -112,8 +119,17 @@ export async function loadRecording(
     }
   }
   handleLine(pending);
-  if (!rec.frames.length) throw new Error("No frames in recording");
-  return rec;
+  if (!times.length) throw new Error("No frames in recording");
+  return {
+    name,
+    times,
+    clockAt: (i) => clocks[i],
+    stateAt: (i) => states[i],
+    positionTimes,
+    positionsBetween: (from, to) => positions.slice(from, to),
+    carTimes,
+    carDataBetween: (from, to) => carData.slice(from, to),
+  };
 }
 
 /** First index with times[i] >= t */
@@ -141,11 +157,10 @@ export interface ReplayControls {
 const LOOKAHEAD_MS = 1500;
 
 export function startReplay(rec: Recording): ReplayControls {
-  const { frames } = rec;
-  const frameTimes = frames.map((f) => f.t);
-  const start = frames[0].t;
-  const end = frames[frames.length - 1].t;
-  let anchorAt = start;
+  const { times } = rec;
+  const start = times[0];
+  const end = times[times.length - 1];
+  let anchorAt = rec.startAt ?? start;
   let anchorPerf = performance.now();
   let playing = false;
   let speed = 1;
@@ -154,6 +169,7 @@ export function startReplay(rec: Recording): ReplayControls {
   let carPtr = 0;
   let lastPublish = 0;
   let lapsFed = -1;
+  let fedState: LiveState | undefined; // the state at lapsFed
 
   const now = () => (playing ? Math.min(end, anchorAt + (performance.now() - anchorPerf) * speed) : anchorAt);
   setWallNow(now);
@@ -171,30 +187,34 @@ export function startReplay(rec: Recording): ReplayControls {
   const step = (seeking = false) => {
     const at = now();
     let i = idx;
-    if (i < 0 || frames[i].t > at) i = Math.max(0, lowerBound(frameTimes, at + 1) - 1);
-    while (i + 1 < frames.length && frames[i + 1].t <= at) i++;
+    if (i < 0 || times[i] > at) i = Math.max(0, lowerBound(times, at + 1) - 1);
+    while (i + 1 < times.length && times[i + 1] <= at) i++;
     if (i !== idx) {
       // Lap history: replay every frame since the last one fed, or rebuild after a jump back
       if (i < lapsFed) {
         resetLaps();
         resetPits();
         lapsFed = -1;
+        fedState = undefined;
       }
       let added = false;
       let pits = false;
       for (let f = lapsFed + 1; f <= i; f++) {
-        const fr = frames[f];
-        if (f > 0 && fr.state.TimingData === frames[f - 1].state.TimingData && fr.state.PitLaneTimeCollection === frames[f - 1].state.PitLaneTimeCollection) continue;
-        added = feedLaps(fr.state.TimingData, fr.state.TimingAppData, false) || added;
+        const st = rec.stateAt(f);
+        const prev = fedState;
+        fedState = st;
+        if (st.TimingData === prev?.TimingData && st.PitLaneTimeCollection === prev?.PitLaneTimeCollection) continue;
+        added = feedLaps(st.TimingData, st.TimingAppData, false) || added;
         // Track time of that frame, from its own clock
-        const at = fr.clock ? fr.clock.trackTime + (fr.t - fr.clock.systemTime) : fr.t;
-        pits = feedPits(fr.state.TimingData, fr.state.PitLaneTimeCollection, at, false) || pits;
+        const clock = rec.clockAt(f);
+        const at = clock ? clock.trackTime + (times[f] - clock.systemTime) : times[f];
+        pits = feedPits(st.TimingData, st.PitLaneTimeCollection, at, false) || pits;
       }
       lapsFed = i;
       if (added) bumpLaps();
       if (pits) bumpPits();
       idx = i;
-      replaceTopics(frames[i].state, frames[i].clock, seeking);
+      replaceTopics(rec.stateAt(i), rec.clockAt(i), seeking);
     }
     const tn = trackNow();
     if (seeking) {
@@ -204,10 +224,10 @@ export function startReplay(rec: Recording): ReplayControls {
       carPtr = lowerBound(rec.carTimes, tn - 60_000);
     }
     const posEnd = lowerBound(rec.positionTimes, tn + LOOKAHEAD_MS);
-    if (posEnd > posPtr) ingestPositions(rec.positions.slice(posPtr, posEnd));
+    if (posEnd > posPtr) ingestPositions(rec.positionsBetween(posPtr, posEnd));
     posPtr = Math.max(posPtr, posEnd);
     const carEnd = lowerBound(rec.carTimes, tn + LOOKAHEAD_MS);
-    if (carEnd > carPtr) ingestCarData(rec.carData.slice(carPtr, carEnd));
+    if (carEnd > carPtr) ingestCarData(rec.carDataBetween(carPtr, carEnd));
     carPtr = Math.max(carPtr, carEnd);
     if (playing && at >= end) {
       anchorAt = end;
@@ -220,7 +240,7 @@ export function startReplay(rec: Recording): ReplayControls {
     source: "replay",
     status: "ready",
     error: null,
-    replay: { name: rec.name, start, end, at: start, playing, speed, loadProgress: null },
+    replay: { name: rec.name, start, end, at: anchorAt, playing, speed, loadProgress: null },
   });
   step(true);
   const timer = setInterval(() => step(), 100);

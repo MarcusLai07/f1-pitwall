@@ -6,13 +6,15 @@ import { WIDGETS, type WidgetId } from "../widgets/registry";
 import { useTicker } from "./hooks";
 import { HeaderWeather } from "./HeaderWeather";
 import { currentScale, useUiScale } from "./scale";
+import { SessionPicker } from "../sessions/SessionPicker";
 
 interface Props {
   onGoLive: () => void;
   onOpenRecording: (file: File) => void;
+  onOpenArchive: (path: string, name: string) => void;
 }
 
-export function TopBar({ onGoLive, onOpenRecording }: Props) {
+export function TopBar({ onGoLive, onOpenRecording, onOpenArchive }: Props) {
   const view = useLayout((s) => s.view);
   const compact = view === "panel";
   return (
@@ -22,6 +24,7 @@ export function TopBar({ onGoLive, onOpenRecording }: Props) {
       <HeaderWeather compact={compact} />
       <div className="ml-auto flex items-center gap-2">
         <SourceStatus onGoLive={onGoLive} onOpenRecording={onOpenRecording} compact={compact} />
+        <SessionsButton onGoLive={onGoLive} onOpenArchive={onOpenArchive} />
         <LayoutMenu />
       </div>
     </header>
@@ -105,7 +108,7 @@ function Field({ label, value, zone, accent }: { label: string; value: string; z
   );
 }
 
-function SourceStatus({ onGoLive, onOpenRecording, compact }: Props & { compact: boolean }) {
+function SourceStatus({ onGoLive, onOpenRecording, compact }: Omit<Props, "onOpenArchive"> & { compact: boolean }) {
   useTicker(1);
   const source = usePitwall((s) => s.source);
   const status = usePitwall((s) => s.status);
@@ -124,7 +127,7 @@ function SourceStatus({ onGoLive, onOpenRecording, compact }: Props & { compact:
           : "bg-zinc-500";
   const label =
     status === "error"
-      ? "Couldn't load recording"
+      ? "Couldn't load"
       : source === "replay"
       ? loading != null
         ? `Loading ${Math.round(loading * 100)}%`
@@ -144,7 +147,7 @@ function SourceStatus({ onGoLive, onOpenRecording, compact }: Props & { compact:
         title={
           source === "live"
             ? error ?? "Reading MultiViewer's live timing at localhost:10101. The delay matches MultiViewer's video."
-            : undefined
+            : error ?? undefined
         }
       >
         <i className={cn("h-1.5 w-1.5 rounded-full", dot)} />
@@ -171,6 +174,32 @@ function SourceStatus({ onGoLive, onOpenRecording, compact }: Props & { compact:
           e.target.value = "";
         }}
       />
+    </div>
+  );
+}
+
+function SessionsButton({ onGoLive, onOpenArchive }: Pick<Props, "onGoLive" | "onOpenArchive">) {
+  const [open, setOpen] = useState(false);
+  const source = usePitwall((s) => s.source);
+  return (
+    <div className="relative">
+      <BarButton onClick={() => setOpen((o) => !o)} title="Past, live and upcoming sessions">
+        Sessions
+      </BarButton>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <SessionPicker
+            onClose={() => setOpen(false)}
+            // Whatever MultiViewer plays is what Live mode shows
+            onWatching={() => source !== "live" && onGoLive()}
+            onOpenArchive={(path, name) => {
+              setOpen(false);
+              onOpenArchive(path, name);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

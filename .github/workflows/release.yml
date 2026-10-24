@@ -1,0 +1,38 @@
+# Builds the extension and attaches pit-wall.zip to a GitHub release, which is what
+# install.sh downloads. Release by pushing a tag: git tag v0.2.0 && git push origin v0.2.0
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: # builds without releasing; the zip is kept as a workflow artifact
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Stamp the version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          jq --arg v "${GITHUB_REF_NAME#v}" '.version = $v' dist/manifest.json > manifest.json
+          mv manifest.json dist/manifest.json
+      - run: cd dist && zip -qr ../pit-wall.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pit-wall
+          path: pit-wall.zip
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" pit-wall.zip --title "Pit Wall $GITHUB_REF_NAME" --generate-notes

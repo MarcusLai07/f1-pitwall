@@ -47,6 +47,12 @@ export default defineConfig({
     // host_permissions, the dev page goes through this proxy instead.
     proxy: {
       "/mv": { target: "http://localhost:10101", rewrite: (p) => p.replace(/^\/mv/, "") },
+      // F1 TV's catalogue (session picker); it sends no CORS headers either
+      "/f1tv": {
+        target: "https://f1tv.formula1.com",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/f1tv/, ""),
+      },
       // Team radio clips for transcription (F1's archive sends no CORS headers)
       "/f1static": {
         target: "https://livetiming.formula1.com",

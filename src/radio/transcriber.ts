@@ -3,11 +3,13 @@
 // storage so a clip is only ever transcribed once.
 
 import { create } from "zustand";
+import { archiveFetch } from "../data/archive";
 import { loadValue, saveValue } from "../lib/storage";
 import type { ModelKey, WorkerReply, WorkerRequest } from "./transcribe.worker";
 
-// Radio clips come from F1's static archive. It sends no CORS headers: the extension
-// has host permission for it, the dev page goes through Vite's /f1static proxy.
+// Radio clips come from F1's static archive (with the F1 TV token when signed in). It
+// sends no CORS headers: the extension has host permission for it, the dev page goes
+// through Vite's /f1static proxy.
 export const CLIP_BASE = import.meta.env.DEV ? "/f1static/" : "https://livetiming.formula1.com/static/";
 export const AUDIO_BASE = "https://livetiming.formula1.com/static/";
 
@@ -110,8 +112,13 @@ function startWorker(model: ModelKey) {
   worker.postMessage({ type: "load", model, ortBase } satisfies WorkerRequest);
 }
 
+/** Where to fetch a clip's audio from (its URL is the archive's) */
+export function clipSource(url: string): string {
+  return CLIP_BASE + url.slice(AUDIO_BASE.length);
+}
+
 async function decode(url: string): Promise<Float32Array> {
-  const res = await fetch(CLIP_BASE + url.slice(AUDIO_BASE.length));
+  const res = await archiveFetch(clipSource(url));
   if (!res.ok) throw new Error(`clip ${res.status}`);
   const ctx = new OfflineAudioContext({ numberOfChannels: 1, length: 16000, sampleRate: 16000 });
   const buf = await ctx.decodeAudioData(await res.arrayBuffer());

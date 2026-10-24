@@ -98,3 +98,42 @@ export function startLive(): () => void {
     clearTimeout(timer);
   };
 }
+
+async function mutate<T>(q: string, variables?: Record<string, unknown>): Promise<T> {
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query: q, variables }),
+  });
+  if (!res.ok) throw new Error(`MultiViewer API ${res.status}`);
+  const json = (await res.json()) as { data?: T; errors?: { message: string; extensions?: { code?: string } }[] };
+  if (json.errors?.length) {
+    const e = json.errors[0];
+    throw Object.assign(new Error(e.message), { code: e.extensions?.code });
+  }
+  return json.data as T;
+}
+
+/**
+ * Opens an F1 TV session in MultiViewer (it plays it with its own F1 TV login and
+ * loads that session's live timing, which Pit Wall then follows). Tries the F1 Live
+ * feed first, then the international feed. Returns MultiViewer's player id.
+ */
+export async function openInMultiViewer(contentId: string, { replace }: { replace: boolean }): Promise<string> {
+  if (replace) {
+    const { players } = await mutate<{ players: { id: string }[] }>("{ players { id } }");
+    for (const p of players) await mutate("mutation($id: ID!) { playerDelete(id: $id) }", { id: p.id });
+  }
+  for (const streamTitle of ["F1 LIVE", "INTERNATIONAL"]) {
+    try {
+      const data = await mutate<{ playerCreate: string }>(
+        "mutation($input: PlayerCreateInput!) { playerCreate(input: $input) }",
+        { input: { contentId, streamTitle } }
+      );
+      return data.playerCreate;
+    } catch (err) {
+      if ((err as { code?: string }).code !== "ADDITIONAL_STREAM_NOT_FOUND") throw err;
+    }
+  }
+  throw new Error("MultiViewer found no main feed for this session");
+}

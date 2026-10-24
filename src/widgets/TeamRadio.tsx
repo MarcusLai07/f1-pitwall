@@ -1,10 +1,12 @@
 // Team radio clips, newest first, with a local Whisper transcript under each one.
-// The feed only carries each clip's path; audio comes from F1's static archive.
+// The feed only carries each clip's path; audio comes from F1's static archive, which
+// wants the F1 TV token, so clips are fetched and played from a blob.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { archiveFetch } from "../data/archive";
 import { trackNow, usePitwall } from "../data/store";
 import { cn, isLightColor, parseGmtOffset, parseUtc, trackClock } from "../lib/format";
-import { AUDIO_BASE, MODEL_SIZES, useRadio } from "../radio/transcriber";
+import { AUDIO_BASE, MODEL_SIZES, clipSource, useRadio } from "../radio/transcriber";
 import type { ModelKey } from "../radio/transcribe.worker";
 import { useTicker } from "../ui/hooks";
 
@@ -18,6 +20,8 @@ export function TeamRadio() {
   const offset = usePitwall((s) => parseGmtOffset(s.live.SessionInfo?.GmtOffset));
   const { model, transcripts, failed, working, queue, request } = useRadio();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobRef = useRef<string | null>(null);
+  const wantRef = useRef<string | null>(null); // the clip asked for last
   const [playing, setPlaying] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [audioFailed, setAudioFailed] = useState<Set<string>>(new Set());
@@ -39,26 +43,44 @@ export function TeamRadio() {
     if (model && list.length) request(list.map((c) => c.url));
   }, [model, list, request]);
 
-  useEffect(() => () => audioRef.current?.pause(), []);
+  useEffect(
+    () => () => {
+      audioRef.current?.pause();
+      if (blobRef.current) URL.revokeObjectURL(blobRef.current);
+    },
+    []
+  );
 
-  const toggle = (url: string) => {
+  const toggle = async (url: string) => {
     const audio = (audioRef.current ??= new Audio());
+    audio.pause();
     if (playing === url) {
-      audio.pause();
+      wantRef.current = null;
       setPlaying(null);
       return;
     }
-    audio.src = url;
-    audio.ontimeupdate = () => setProgress(audio.duration ? audio.currentTime / audio.duration : 0);
-    audio.onended = () => setPlaying(null);
-    const fail = () => {
-      setAudioFailed((f) => new Set(f).add(url));
-      setPlaying(null);
-    };
-    audio.onerror = fail;
+    wantRef.current = url;
     setProgress(0);
     setPlaying(url);
-    audio.play().catch(fail);
+    const fail = () => {
+      setAudioFailed((f) => new Set(f).add(url));
+      if (wantRef.current === url) setPlaying(null);
+    };
+    try {
+      const res = await archiveFetch(clipSource(url));
+      if (!res.ok) throw new Error(`clip ${res.status}`);
+      const blob = URL.createObjectURL(await res.blob());
+      if (wantRef.current !== url) return URL.revokeObjectURL(blob);
+      if (blobRef.current) URL.revokeObjectURL(blobRef.current);
+      blobRef.current = blob;
+      audio.src = blob;
+      audio.ontimeupdate = () => setProgress(audio.duration ? audio.currentTime / audio.duration : 0);
+      audio.onended = () => setPlaying(null);
+      audio.onerror = fail;
+      await audio.play();
+    } catch {
+      fail();
+    }
   };
 
   return (

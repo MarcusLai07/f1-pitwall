@@ -1,39 +1,61 @@
 # Pit Wall
 
-One rearrangeable window for following F1 sessions live: timing tower, 3D track map, telemetry, race control and sector leaderboard, with weather and the session clocks in the header. It's a Chromium extension (built for Dia) that opens as its own resizable window, with a compact side-panel view too.
+One rearrangeable window for following F1 sessions: timing tower, 3D track map, telemetry, team radio with transcripts, race control and sector leaderboard, with weather and the session clocks in the header. It's a Chromium extension (built for Dia; works in Chrome, Arc, Brave and Edge) that opens as its own resizable window, with a compact side-panel view too.
 
-Pit Wall doesn't talk to F1 itself. It reads the live timing that [MultiViewer](https://multiviewer.app) already pulls with your F1 TV login, through MultiViewer's local API on `localhost:10101`. Because MultiViewer holds that data back to match its video player, everything in Pit Wall lines up with what you're watching.
-
-## Requirements
-
-- MultiViewer running and signed in to F1 TV, with a live session (or a replay) open.
-- Node 20+ to build.
-
-## Install
+## Install in one line (macOS)
 
 ```bash
-npm install
-npm run build
+curl -fsSL https://raw.githubusercontent.com/MarcusLai07/f1-pitwall/main/install.sh | bash
 ```
 
-Then in Dia open `dia://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the `dist` folder. After rebuilding, click ↻ on Pit Wall in the extensions page.
+It downloads the latest release to `~/PitWall`, copies that folder's path to your clipboard and opens your browser's extensions page. Then:
+
+1. Turn on **Developer mode** (top right).
+2. Click **Load unpacked** → press **⌘⇧G** → **⌘V** → Return → **Select**.
+3. Pin Pit Wall from the 🧩 menu and click it.
+
+**Update:** run the same line again, then click ↻ on Pit Wall in the extensions page.
+
+<details>
+<summary><b>Windows, Linux, other options and uninstall</b></summary>
+
+<br>
+
+| | |
+|---|---|
+| Without the script | Download `pit-wall.zip` from [the latest release](https://github.com/MarcusLai07/f1-pitwall/releases/latest), unzip it somewhere it can stay, and pick that folder in **Load unpacked**. To update, unzip the new one over it and click ↻. |
+| Somewhere else | `… \| bash -s -- --dir ~/Apps/PitWall` |
+| Uninstall | `… \| bash -s -- --uninstall`, then remove Pit Wall from the extensions page |
+
+**Why the manual click?** Browsers only let you add an extension outside their store through *Load unpacked*. No script is allowed to do it for you.
+
+</details>
+
+## Where the data comes from
+
+You need your own [F1 TV](https://f1tv.formula1.com) subscription. Pit Wall has no server: everything runs in your browser with your login.
+
+- **Past sessions:** open **Sessions**, click **Sign in** and log in on formula1.com in the same browser. Pit Wall reads that login from the browser (the formula1.com sign-in cookie) and loads any past session's timing, track positions, telemetry and team radio from F1's timing archive, the same archive FastF1 uses. Pick a session and click **Load**. There's no video; scrub with the replay bar. The sign-in lasts a few days; opening formula1.com renews it.
+- **Live:** [MultiViewer](https://multiviewer.app), running and signed in to F1 TV on the same computer. Pit Wall reads the live timing MultiViewer already pulls, through its local API on `localhost:10101`, so everything lines up with MultiViewer's video. **Sessions → Watch live** opens the session in MultiViewer.
+- **Replays with video:** **Sessions → MultiViewer** opens a past session's video in MultiViewer and Pit Wall follows its timing. In some regions F1 TV only allows current-season replays once the season is over (MultiViewer shows error ACN_4005); **Load** still works for those.
 
 ## Use
 
+- **Sessions:** every session of a season, past, live and upcoming, in your time zone. **Load** plays a past one from F1's archive, **MultiViewer** opens its video in MultiViewer, **Watch live** follows a live one through MultiViewer.
 - **Toolbar button:** opens Pit Wall in its own window (or focuses it). The window remembers its size and position.
 - **Any screen:** the window is laid out for a ~900 px tall screen and scales to the real one, so a big monitor gets the same layout, just larger; other aspect ratios only stretch the columns. Nothing scrolls: widgets resize to fit the height. **Layout → UI size** makes everything bigger or smaller.
 - **Right-click the toolbar button → Open in side panel:** the compact one-column view. Narrow windows (under 760 px) use it too.
 - **Header:** session time remaining, **Track time** (the circuit's time zone) next to **Your time** (the same moment in your time zone), and a weather strip.
-- **Timing tower:** mini-sectors sit under each sector time. Click a driver's tyre for their tyre history: every set, new or used, the laps run on it and its best lap, with each pit stop in between (official pit-lane time, plus the time stood still estimated from car data, ±0.3 s). Stops are timed from when Pit Wall starts watching.
+- **Timing tower:** mini-sectors sit under each sector time. Click a driver's tyre for their tyre history: every set, new or used, the laps run on it and its best lap, with each pit stop in between (official pit-lane time, plus the time stood still estimated from car data, ±0.3 s). Live, stops are timed from when Pit Wall starts watching; sessions loaded from F1's archive have every stop.
 - **Click drivers** in the timing tower to select them (up to five). Telemetry shows the two most recent in the widget; cars 3–5 open out to its left as floating cards of the same size. The map highlights them and **follow** tracks the most recent one.
 - **Track map:** drag to move it, right-drag (or Shift + drag) to rotate and tilt, scroll to zoom, double-click or **fit** to frame the whole track again. A new fastest lap (provisional pole in Q3) and, in races, a new leader drop in as banners at the top of the map. It checks the stored track shape against where cars actually drive: if F1 has moved the coordinate frame it re-aligns the shape, and if the layout doesn't match at all (or there's no stored shape) it draws the track from a live lap instead. The result is remembered per circuit and season.
 - **Team radio:** play any clip. Set **Transcripts** to *Standard* (about 250 MB) or *Light* (about 80 MB) to transcribe clips on your Mac with OpenAI's Whisper; the model downloads once and transcripts are kept.
-- **Drawer** (under the timing tower): Race control, Investigations (each incident's latest status and any penalty), Track limits (strikes per driver), Lap times (every lap by driver, with tyres) and Race trace (gap to the leader by lap; lap times in practice and qualifying). New race control messages pop up above it; click one to open its tab. Lap times and race trace start from when Pit Wall starts watching.
+- **Drawer** (under the timing tower): Race control, Investigations (each incident's latest status and any penalty), Track limits (strikes per driver), Lap times (every lap by driver, with tyres) and Race trace (gap to the leader by lap; lap times in practice and qualifying). New race control messages pop up above it; click one to open its tab. Live, lap times and race trace start from when Pit Wall starts watching; sessions loaded from F1's archive have every lap.
 - **Layout:** hover the top edge of a widget to slide its title bar down, then drag it to move and resize from the edges. The grid moves in steps of one timing row, and the tower stops growing at the last driver. The **Layout** menu adds or removes widgets, locks the layout, switches between *snap upward* (default) and *free placement*, and resets to the default.
 
 ## Replay
 
-Record a session while MultiViewer is live, then play it back through the same widgets:
+Past sessions loaded from **Sessions** play in the replay bar. You can also record a session while MultiViewer is live and play it back through the same widgets:
 
 ```bash
 npm run record -- --minutes 130 --out recordings/2026-us-gp-race.ndjson.gz
@@ -43,15 +65,25 @@ In Pit Wall, click **Replay…** and pick the file. Space plays and pauses; the 
 
 ## Develop
 
+Needs Node 20+.
+
 ```bash
-npm run dev
+npm install
+npm run dev     # dev page
+npm run build   # the extension, in dist/ (Load unpacked → dist)
 ```
 
-Opens on [localhost:5288/window.html](http://localhost:5288/window.html) (or `/sidepanel.html`). The dev server proxies `/mv` to MultiViewer because its API sends no CORS headers; the built extension uses `host_permissions` instead. Add `?replay=/recordings/<file>` to load a recording from `recordings/` straight away.
+The dev page opens on [localhost:5288/window.html](http://localhost:5288/window.html) (or `/sidepanel.html`). The dev server proxies `/mv` to MultiViewer and `/f1static` to F1's archive, because neither sends CORS headers; the built extension uses `host_permissions` instead. The dev page can't read cookies, so F1 TV sign-in only works in the extension.
+
+- `?replay=/recordings/<file>` loads a recording from `recordings/`.
+- `?archive=<session path>&archiveBase=/recordings/archive/` plays a saved copy of an archive session, e.g. `recordings/archive/2024/2024-10-27_Mexico_City_Grand_Prix/2024-10-27_Race/` holding its `.jsonStream` files.
+
+**Releasing:** bump the version, then `git tag v0.3.0 && git push origin v0.3.0`. The Release workflow builds the extension, stamps the tag's version into its manifest and attaches `pit-wall.zip` to a GitHub release, which `install.sh` downloads.
 
 Code map:
 
-- `src/data/`: MultiViewer poller, replay loader, store, sample buffers for car positions and telemetry, and `derive.ts`, which turns raw F1 topics into tower rows.
+- `src/data/`: MultiViewer poller, F1 archive loader (`archive.ts`), replay engine, store, sample buffers for car positions and telemetry, and `derive.ts`, which turns raw F1 topics into tower rows.
+- `src/sessions/`: the session picker, its schedule (OpenF1, or F1's archive index while OpenF1 is closed during live sessions) and the F1 TV sign-in.
 - `src/widgets/`: the widgets. The timing tower, telemetry and track map are adapted from `f1-dashboard`.
 - `src/circuit3d/`, `src/circuits/`: the three.js circuit engine and the FastF1-derived track geometry, copied from `f1-dashboard`.
 - `src/layout/`: grid layout, defaults and persistence.
@@ -59,6 +91,7 @@ Code map:
 ## Notes
 
 - MultiViewer's API is unofficial and could change with a MultiViewer update.
-- Team radio audio and transcription fetch clips from F1's archive (`livetiming.formula1.com/static`), so the extension asks for access to that host.
+- Permissions: `cookies` and `*.formula1.com` to read your F1 TV sign-in and fetch from F1's archive (team radio clips come from there too), `api.openf1.org` for the schedule, `localhost:10101` for MultiViewer.
+- Your F1 TV token stays in your browser. Pit Wall only sends it to F1's own archive at `livetiming.formula1.com`.
 - Circuits without a stored shape (e.g. Madring) or with a different layout show a map after about one lap of running, drawn from live positions (no sector colours or turn numbers there).
 - For personal use. Don't redistribute the timing data.
