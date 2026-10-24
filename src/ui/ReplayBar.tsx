@@ -10,7 +10,7 @@ export function ReplayBar({ controls }: { controls: ReplayControls }) {
   if (!replay || replay.loadProgress != null) return null;
   const { start, end, at, playing, speed, name } = replay;
   return (
-    <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800 bg-zinc-950 px-3 py-1.5">
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-zinc-800 bg-zinc-950 px-3 py-1.5">
       <button
         onClick={playing ? controls.pause : controls.play}
         className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-800 text-sm text-white hover:bg-zinc-700"
@@ -32,7 +32,7 @@ export function ReplayBar({ controls }: { controls: ReplayControls }) {
         step={1000}
         value={at}
         onChange={(e) => controls.seek(Number(e.target.value))}
-        className="flex-1 accent-[#e10600]"
+        className="min-w-[140px] flex-1 accent-[#e10600]"
       />
       <span className="w-14 font-f1 text-xs tabular-nums text-zinc-500">{formatDuration(end - start)}</span>
       <div className="flex overflow-hidden rounded-md border border-zinc-800">

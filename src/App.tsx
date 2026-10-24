@@ -9,9 +9,22 @@ import type { View } from "./layout/defaults";
 import { ReplayBar } from "./ui/ReplayBar";
 import { TopBar } from "./ui/TopBar";
 
-const view: View = document.documentElement.dataset.view === "panel" ? "panel" : "window";
+const baseView: View = document.documentElement.dataset.view === "panel" ? "panel" : "window";
+// Below this width the window uses the one-column side-panel layout
+const NARROW_PX = 760;
+
+function useView(): View {
+  const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_PX);
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < NARROW_PX);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return baseView === "panel" || narrow ? "panel" : "window";
+}
 
 export function App() {
+  const view = useView();
   const kind = usePitwall((s) => sessionKind(s.live.SessionInfo));
   const layoutReady = useLayout((s) => s.ready);
   const loadLayout = useLayout((s) => s.load);
@@ -23,7 +36,7 @@ export function App() {
   // Each view keeps one layout per session type (practice / qualifying / race)
   useEffect(() => {
     loadLayout(view, kind);
-  }, [kind, loadLayout]);
+  }, [view, kind, loadLayout]);
 
   const goLive = useCallback(() => {
     loadIdRef.current++;
