@@ -33,15 +33,17 @@ It downloads the latest release to `~/PitWall`, copies that folder's path to you
 
 ## Where the data comes from
 
-You need your own [F1 TV](https://f1tv.formula1.com) subscription. Pit Wall has no server: everything runs in your browser with your login.
+Straight from F1, in your browser. Pit Wall has no server.
 
-- **Past sessions:** open **Sessions**, click **Sign in** and log in on formula1.com in the same browser. Pit Wall reads that login from the browser (the formula1.com sign-in cookie) and loads any past session's timing, track positions, telemetry and team radio from F1's timing archive, the same archive FastF1 uses. Pick a session and click **Load**. There's no video; scrub with the replay bar. The sign-in lasts a few days; opening formula1.com renews it.
-- **Live:** [MultiViewer](https://multiviewer.app), running and signed in to F1 TV on the same computer. Pit Wall reads the live timing MultiViewer already pulls, through its local API on `localhost:10101`, so everything lines up with MultiViewer's video. **Sessions → Watch live** opens the session in MultiViewer.
-- **Replays with video:** **Sessions → MultiViewer** opens a past session's video in MultiViewer and Pit Wall follows its timing. In some regions F1 TV only allows current-season replays once the season is over (MultiViewer shows error ACN_4005); **Load** still works for those.
+- **Live:** F1's live timing feed. Without signing in you get F1's free feed: timing, sectors and race control. **Sign in to F1 TV** (top right of **Sessions**) to add cars on the map, telemetry and team radio. F1's feed runs ahead of most video streams, so open the source menu (the **Live · F1** chip) and raise **Delay** until the timing matches what you're watching.
+- **Past sessions:** **Sessions → Replay** loads any past session's timing, track positions, telemetry and team radio from F1's timing archive (the one FastF1 uses). It needs the F1 TV sign-in. There's no video; scrub with the replay bar.
+- **Signing in:** click **Sign in to F1 TV** at the top right of **Sessions**. If this browser is already signed in to formula1.com, that's it; otherwise formula1.com's own sign-in page opens in a window, and Pit Wall picks the login up and closes that window once you're in. Your password only ever goes to formula1.com; Pit Wall uses the site's sign-in cookie and sends its token only to F1's servers. It lasts a few days, and visiting formula1.com renews it. Click your plan's name (e.g. **F1 TV Pro ▾**) to **Sign out of Pit Wall**; formula1.com stays signed in.
+- **Video:** Pit Wall shows data only. Watch the session wherever you normally do and set the **Delay** to match it. It doesn't depend on F1 TV's video, so it also works where F1 TV blocks live streams or current-season replays.
 
 ## Use
 
-- **Sessions:** every session of a season, past, live and upcoming, in your time zone. **Load** plays a past one from F1's archive, **MultiViewer** opens its video in MultiViewer, **Watch live** follows a live one through MultiViewer.
+- **Sessions:** every session of a season, past, live and upcoming, in your time zone. **Replay** plays a past one from F1's archive and **Follow** switches to live. Your F1 TV sign-in sits top right.
+- **Source chip** (top right, e.g. *Live · F1 TV · 3 s behind* or *Replay · F1 TV archive*): what the board shows and where it comes from. Click it to set the live delay.
 - **Toolbar button:** opens Pit Wall in its own window (or focuses it). The window remembers its size and position.
 - **Any screen:** the window is laid out for a ~900 px tall screen and scales to the real one, so a big monitor gets the same layout, just larger; other aspect ratios only stretch the columns. Nothing scrolls: widgets resize to fit the height. **Layout → UI size** makes everything bigger or smaller.
 - **Right-click the toolbar button → Open in side panel:** the compact one-column view. Narrow windows (under 760 px) use it too.
@@ -55,13 +57,7 @@ You need your own [F1 TV](https://f1tv.formula1.com) subscription. Pit Wall has 
 
 ## Replay
 
-Past sessions loaded from **Sessions** play in the replay bar. You can also record a session while MultiViewer is live and play it back through the same widgets:
-
-```bash
-npm run record -- --minutes 130 --out recordings/2026-us-gp-race.ndjson.gz
-```
-
-In Pit Wall, click **Replay…** and pick the file. Space plays and pauses; the bar has seek, ±10 s and 1–16× speed. **Go live** switches back.
+Past sessions loaded from **Sessions** play in the replay bar. Space plays and pauses; the bar has seek, ±10 s and 1–16× speed. Replays start a minute before the session's clock starts. **Go live** switches back.
 
 ## Develop
 
@@ -73,16 +69,16 @@ npm run dev     # dev page
 npm run build   # the extension, in dist/ (Load unpacked → dist)
 ```
 
-The dev page opens on [localhost:5288/window.html](http://localhost:5288/window.html) (or `/sidepanel.html`). The dev server proxies `/mv` to MultiViewer and `/f1static` to F1's archive, because neither sends CORS headers; the built extension uses `host_permissions` instead. The dev page can't read cookies, so F1 TV sign-in only works in the extension.
+The dev page opens on [localhost:5288/window.html](http://localhost:5288/window.html) (or `/sidepanel.html`). The dev server proxies `/f1live` to F1's live feed and `/f1static` to its archive, because neither sends CORS headers; the built extension uses `host_permissions` instead. The dev page can't read cookies, so F1 TV sign-in only works in the extension.
 
-- `?replay=/recordings/<file>` loads a recording from `recordings/`.
+- `?replay=/recordings/<file>` loads an older MultiViewer recording (gzip NDJSON, one state per line) from `recordings/`.
 - `?archive=<session path>&archiveBase=/recordings/archive/` plays a saved copy of an archive session, e.g. `recordings/archive/2024/2024-10-27_Mexico_City_Grand_Prix/2024-10-27_Race/` holding its `.jsonStream` files.
 
 **Releasing:** bump the version, then `git tag v0.3.0 && git push origin v0.3.0`. The Release workflow builds the extension, stamps the tag's version into its manifest and attaches `pit-wall.zip` to a GitHub release, which `install.sh` downloads.
 
 Code map:
 
-- `src/data/`: MultiViewer poller, F1 archive loader (`archive.ts`), replay engine, store, sample buffers for car positions and telemetry, and `derive.ts`, which turns raw F1 topics into tower rows.
+- `src/data/`: F1 live feed client (`f1live.ts`), F1 archive loader (`archive.ts`), replay engine, store, sample buffers for car positions and telemetry, and `derive.ts`, which turns raw F1 topics into tower rows.
 - `src/sessions/`: the session picker, its schedule (OpenF1, or F1's archive index while OpenF1 is closed during live sessions) and the F1 TV sign-in.
 - `src/widgets/`: the widgets. The timing tower, telemetry and track map are adapted from `f1-dashboard`.
 - `src/circuit3d/`, `src/circuits/`: the three.js circuit engine and the FastF1-derived track geometry, copied from `f1-dashboard`.
@@ -90,8 +86,8 @@ Code map:
 
 ## Notes
 
-- MultiViewer's API is unofficial and could change with a MultiViewer update.
-- Permissions: `cookies` and `*.formula1.com` to read your F1 TV sign-in and fetch from F1's archive (team radio clips come from there too), `api.openf1.org` for the schedule, `localhost:10101` for MultiViewer.
-- Your F1 TV token stays in your browser. Pit Wall only sends it to F1's own archive at `livetiming.formula1.com`.
+- F1's live feed and archive are unofficial interfaces and could change without notice.
+- Permissions: `cookies` and `*.formula1.com` to read your F1 TV sign-in and reach F1's live feed and archive (team radio clips come from there too), `api.openf1.org` for the schedule.
+- Your F1 TV token stays in your browser. Pit Wall only sends it to F1's own live timing and archive at `livetiming.formula1.com`.
 - Circuits without a stored shape (e.g. Madring) or with a different layout show a map after about one lap of running, drawn from live positions (no sector colours or turn numbers there).
 - For personal use. Don't redistribute the timing data.

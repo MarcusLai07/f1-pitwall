@@ -1,6 +1,6 @@
 // Replay source: plays back a recording through the same store and buffers as live
-// mode. Recordings come from scripts/record.mjs (one MultiViewer state per line, gzip
-// NDJSON) or from F1's timing archive (archive.ts).
+// mode. Recordings come from F1's timing archive (archive.ts), or for development from
+// older MultiViewer recordings (one state per line, gzip NDJSON; ?replay= on the dev page).
 
 import { parseUtc } from "../lib/format";
 import { ingestCarData, ingestPositions, resetBuffers } from "./buffers";
@@ -152,7 +152,7 @@ export interface ReplayControls {
   stop: () => void;
 }
 
-// How far ahead of the track clock MultiViewer's state usually runs; the map
+// How far ahead of the board's clock samples are let through; the map
 // interpolates inside this window.
 const LOOKAHEAD_MS = 1500;
 

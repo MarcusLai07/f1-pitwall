@@ -1,17 +1,14 @@
-// Every session of a season, past, live and upcoming. A past one loads straight from
-// F1's timing archive with your F1 TV sign-in (timing, map, telemetry; no video), or
-// opens in MultiViewer with its video. Live ones open in MultiViewer, which Pit Wall
-// follows.
+// Every session of a season, past, live and upcoming, plus the F1 TV account. A past
+// session replays straight from F1's timing archive with your F1 TV sign-in (timing,
+// map, telemetry, radio; no video); a live one is followed through F1's live feed.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArchiveAuthError, archivePath } from "../data/archive";
-import { openInMultiViewer } from "../data/multiviewer";
 import { usePitwall } from "../data/store";
 import { cn } from "../lib/format";
-import { loadValue, saveValue } from "../lib/storage";
 import { useTicker } from "../ui/hooks";
-import { CatalogRefused, findContentId, loadSeason, sessionState, type Meeting, type ScheduleSource, type Session } from "./catalog";
-import { openSignIn, useF1Account } from "./f1account";
+import { loadSeason, sessionState, type Meeting, type ScheduleSource, type Session } from "./catalog";
+import { signIn, signOut, useF1Account } from "./f1account";
 
 const FIRST_YEAR = 2023; // OpenF1's history starts here
 const day = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" });
@@ -25,12 +22,11 @@ function relative(ms: number): string {
 
 interface Props {
   onClose: () => void;
-  /** MultiViewer is opening a session: Pit Wall should follow its live timing */
-  onWatching: () => void;
+  onGoLive: () => void;
   onOpenArchive: (path: string, name: string) => void;
 }
 
-export function SessionPicker({ onClose, onWatching, onOpenArchive }: Props) {
+export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
   useTicker(1 / 30); // keep "in 12 min" current
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
@@ -38,15 +34,11 @@ export function SessionPicker({ onClose, onWatching, onOpenArchive }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
-  const [replace, setReplace] = useState(true);
   const showing = usePitwall((s) => s.live.SessionInfo?.Key);
+  const source = usePitwall((s) => s.source);
   const account = useF1Account();
   const currentRef = useRef<HTMLDivElement>(null);
   const now = Date.now();
-
-  useEffect(() => {
-    loadValue<boolean>("picker:replace").then((v) => v !== undefined && setReplace(v));
-  }, []);
 
   // Signing in can unlock the archive's schedule when OpenF1 is closed, so retry then
   const signedIn = account.state === "signed-in";
@@ -71,11 +63,19 @@ export function SessionPicker({ onClose, onWatching, onOpenArchive }: Props) {
     currentRef.current?.scrollIntoView({ block: "start" });
   }, [focusKey]);
 
+  const follow = () => {
+    if (source !== "live") onGoLive();
+    onClose();
+  };
+
   const load = async (s: Session, m: Meeting) => {
     setNote(null);
     if (account.state !== "signed-in") {
       setNote({
-        text: account.state === "unavailable" ? "Loading from F1's archive works in the Pit Wall extension." : "Sign in to F1 TV first (below).",
+        text:
+          account.state === "unavailable"
+            ? "Replays need the F1 TV sign-in, which only works in the installed extension (not this dev page)."
+            : "Replays come from F1's archive, which needs your F1 TV sign-in: use Sign in at the top right.",
         bad: true,
       });
       return;
@@ -91,36 +91,6 @@ export function SessionPicker({ onClose, onWatching, onOpenArchive }: Props) {
     } catch (err) {
       setNote({
         text: err instanceof ArchiveAuthError ? "F1 refused the sign-in. Open formula1.com to renew it, then try again." : err instanceof Error ? err.message : String(err),
-        bad: true,
-      });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const watch = async (s: Session, m: Meeting) => {
-    setBusy(s.key);
-    setNote(null);
-    try {
-      const contentId = await findContentId(s, m);
-      if (!contentId) {
-        setNote({ text: `F1 TV doesn't have ${m.name} · ${s.name} yet.`, bad: true });
-        return;
-      }
-      await openInMultiViewer(contentId, { replace });
-      onWatching();
-      setNote({ text: `Opened ${s.name} in MultiViewer. Pit Wall follows it once its timing loads.` });
-      setTimeout(onClose, 1500);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setNote({
-        text: err instanceof CatalogRefused
-          ? import.meta.env.DEV
-            ? "F1 TV refuses lookups from the localhost dev page. Use the Pit Wall extension (load dist in Dia)."
-            : "F1 TV refused the lookup. Try again in a moment."
-          : /fetch|MultiViewer API|NetworkError/i.test(msg)
-          ? "MultiViewer isn't reachable. Open it (signed in to F1 TV) and try again."
-          : msg,
         bad: true,
       });
     } finally {
@@ -148,7 +118,9 @@ export function SessionPicker({ onClose, onWatching, onOpenArchive }: Props) {
             {season.source === "saved" ? "saved schedule" : "from F1's archive"}
           </span>
         )}
-        <button onClick={onClose} className="ml-auto flex h-6 w-6 items-center justify-center rounded text-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" aria-label="Close">
+        <div className="ml-auto" />
+        <AccountChip />
+        <button onClick={onClose} className="flex h-6 w-6 items-center justify-center rounded text-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" aria-label="Close">
           ×
         </button>
       </div>
@@ -187,31 +159,22 @@ export function SessionPicker({ onClose, onWatching, onOpenArchive }: Props) {
                       <span className="ml-auto flex items-center gap-1.5">
                         {isShowing && <span className="rounded bg-sky-500/20 px-1.5 py-px text-[10px] font-bold uppercase text-sky-300">Showing</span>}
                         {state === "live" && <span className="animate-pulse rounded bg-f1-red px-1.5 py-px text-[10px] font-black uppercase text-white">Live</span>}
-                        {state === "past" && (
+                        {state !== "upcoming" && (
                           <button
                             disabled={busy !== null}
-                            onClick={() => load(s, m)}
-                            title="Timing, map and telemetry from F1's archive (your F1 TV sign-in, no video)"
+                            onClick={() => (state === "live" ? follow() : load(s, m))}
+                            title={
+                              state === "live"
+                                ? "Follow it live in Pit Wall"
+                                : "Replay its timing, map, telemetry and team radio from F1's archive (F1 TV sign-in; no video)"
+                            }
                             className={cn(
-                              "rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                              "w-[68px] rounded-md border py-0.5 text-[10px] font-bold uppercase tracking-wider",
                               busy === s.key ? "border-zinc-600 text-zinc-400" : "border-f1-red/70 bg-f1-red/15 text-white hover:bg-f1-red/30",
                               busy !== null && busy !== s.key && "opacity-40"
                             )}
                           >
-                            {busy === s.key ? "Opening…" : "Load"}
-                          </button>
-                        )}
-                        {state !== "upcoming" && (
-                          <button
-                            disabled={busy !== null}
-                            onClick={() => watch(s, m)}
-                            title="Open the video in MultiViewer; Pit Wall follows its timing"
-                            className={cn(
-                              "rounded-md border border-zinc-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white",
-                              busy !== null && "opacity-40"
-                            )}
-                          >
-                            {state === "live" ? "Watch live" : "MultiViewer"}
+                            {busy === s.key ? "Opening…" : state === "live" ? "Follow" : "Replay"}
                           </button>
                         )}
                       </span>
@@ -226,20 +189,8 @@ export function SessionPicker({ onClose, onWatching, onOpenArchive }: Props) {
 
       <div className="shrink-0 border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-400">
         {note && <p className={cn("mb-1.5 font-semibold", note.bad ? "text-amber-400" : "text-green-400")}>{note.text}</p>}
-        <AccountLine />
-        <div className="mt-1.5 flex items-center gap-3">
-          <label className="flex cursor-pointer items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={replace}
-              onChange={(e) => {
-                setReplace(e.target.checked);
-                saveValue("picker:replace", e.target.checked);
-              }}
-              className="accent-[#e10600]"
-            />
-            Close what's open in MultiViewer first
-          </label>
+        <div className="flex items-center gap-3">
+          <span className="text-zinc-500">Replays and live timing come straight from F1 · no video</span>
           <span className="ml-auto text-zinc-500">Times are yours</span>
         </div>
       </div>
@@ -249,33 +200,73 @@ export function SessionPicker({ onClose, onWatching, onOpenArchive }: Props) {
 
 const until = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
-function AccountLine() {
-  const { state, product, expires } = useF1Account();
-  const button = (label: string) => (
-    <button onClick={openSignIn} className="rounded-md bg-f1-red px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white hover:brightness-110">
-      {label}
-    </button>
-  );
-  if (state === "signed-in")
-    return (
-      <p className="flex items-center gap-1.5">
-        <span className="font-bold text-green-400">✓ F1 TV</span>
-        <span className="text-zinc-300">{product ?? "signed in"}</span>
-        <span className="text-zinc-500">· past sessions load from F1's archive{expires ? ` · sign-in good until ${until.format(expires)}` : ""}</span>
-      </p>
-    );
+/** The F1 TV account Pit Wall uses: sign in, see whose it is, sign out */
+function AccountChip() {
+  const { state, product, expires, waiting, problem } = useF1Account();
+  const [open, setOpen] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const chip = "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider";
   if (state === "unavailable")
-    return <p className="text-zinc-500">F1 TV sign-in works in the installed extension (it reads your formula1.com login).</p>;
-  return (
-    <p className="flex items-center gap-2">
-      <span className={state === "signed-out" ? "text-zinc-300" : "text-amber-400"}>
-        {state === "signed-out"
-          ? "Sign in to F1 TV to load past sessions here: timing, map and telemetry (no video)."
-          : state === "expired"
-            ? "Your F1 TV sign-in ran out. Opening formula1.com renews it."
-            : "This F1 account has no active F1 TV subscription."}
+    return (
+      <span className={cn(chip, "border border-zinc-800 text-zinc-500")} title="The dev page can't read your formula1.com login; the installed extension can">
+        F1 TV · extension only
       </span>
-      {state !== "no-subscription" && button(state === "expired" ? "Renew" : "Sign in")}
-    </p>
+    );
+  if (waiting && state !== "signed-in")
+    return (
+      <button
+        onClick={() => signIn().catch(() => {})}
+        className={cn(chip, "flex items-center gap-1.5 border border-sky-500/50 text-sky-300 hover:bg-sky-500/10")}
+        title="Sign in on formula1.com in the window that opened; Pit Wall picks it up by itself. Click to bring that window back."
+      >
+        <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400" />
+        Finish signing in in the F1 window…
+      </button>
+    );
+  if (state !== "signed-in")
+    return (
+      <button
+        onClick={() => signIn().catch((err) => setFailed(err instanceof Error ? err.message : String(err)))}
+        className={cn(chip, state === "signed-out" ? "bg-f1-red text-white hover:brightness-110" : "border border-amber-500/60 text-amber-300 hover:bg-amber-500/10")}
+        title={
+          failed ??
+          problem ??
+          (state === "signed-out"
+            ? "Uses your formula1.com login in this browser (opens its sign-in page if you aren't signed in)"
+            : state === "expired"
+              ? "Your F1 TV sign-in ran out; signing in on formula1.com renews it"
+              : "This F1 account has no active F1 TV subscription")
+        }
+      >
+        {state === "signed-out" ? "Sign in to F1 TV" : state === "expired" ? "Renew F1 TV sign-in" : "No F1 TV subscription"}
+      </button>
+    );
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} className={cn(chip, "flex items-center gap-1.5 border border-green-500/40 text-green-300 hover:bg-green-500/10")}>
+        <i className="h-1.5 w-1.5 rounded-full bg-green-400" />
+        {product ?? "F1 TV"}
+        <span className="text-green-500/70">▾</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-10 w-64 rounded-lg border border-zinc-700 bg-zinc-950 p-2.5 text-[11px] leading-snug text-zinc-300 shadow-xl">
+          <p className="font-semibold text-zinc-100">Signed in to F1 TV</p>
+          <p className="mt-1 text-zinc-400">
+            With your formula1.com login in this browser. Replays and live timing come straight from F1, with telemetry and team radio.
+          </p>
+          {expires && <p className="mt-1 text-zinc-500">Good until {until.format(expires)}; visiting formula1.com renews it.</p>}
+          <button
+            onClick={() => {
+              setOpen(false);
+              signOut();
+            }}
+            className="mt-2 w-full rounded-md border border-zinc-700 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-200 hover:border-zinc-500 hover:text-white"
+          >
+            Sign out of Pit Wall
+          </button>
+          <p className="mt-1 text-[10px] text-zinc-500">formula1.com stays signed in.</p>
+        </div>
+      )}
+    </div>
   );
 }

@@ -43,21 +43,22 @@ export default defineConfig({
   resolve: { conditions: ["onnxruntime-web-use-extern-wasm", ...defaultClientConditions] },
   server: {
     port: 5288,
-    // MultiViewer's API sends no CORS headers; the extension gets around that with
-    // host_permissions, the dev page goes through this proxy instead.
+    // F1 sends no CORS headers; the extension gets around that with host_permissions,
+    // the dev page goes through these proxies instead.
     proxy: {
-      "/mv": { target: "http://localhost:10101", rewrite: (p) => p.replace(/^\/mv/, "") },
-      // F1 TV's catalogue (session picker); it sends no CORS headers either
-      "/f1tv": {
-        target: "https://f1tv.formula1.com",
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/f1tv/, ""),
-      },
-      // Team radio clips for transcription (F1's archive sends no CORS headers)
+      // F1's timing archive and team radio clips (no CORS headers)
       "/f1static": {
         target: "https://livetiming.formula1.com",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/f1static/, "/static"),
+      },
+      // F1's live timing hub (Server-Sent Events). Its load-balancer cookie has to
+      // stick to localhost for the stream and the posts to reach the same server.
+      "/f1live": {
+        target: "https://livetiming.formula1.com",
+        changeOrigin: true,
+        cookieDomainRewrite: "",
+        rewrite: (p) => p.replace(/^\/f1live/, "/signalrcore"),
       },
     },
   },

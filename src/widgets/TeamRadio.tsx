@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { archiveFetch } from "../data/archive";
+import { useFreeFeed } from "../data/liveSettings";
 import { trackNow, usePitwall } from "../data/store";
 import { cn, isLightColor, parseGmtOffset, parseUtc, trackClock } from "../lib/format";
 import { AUDIO_BASE, MODEL_SIZES, clipSource, useRadio } from "../radio/transcriber";
@@ -14,6 +15,7 @@ const NEW_MS = 90_000;
 
 export function TeamRadio() {
   useTicker(1);
+  const freeFeed = useFreeFeed();
   const captures = usePitwall((s) => s.live.TeamRadio?.Captures);
   const path = usePitwall((s) => s.live.SessionInfo?.Path);
   const drivers = usePitwall((s) => s.live.DriverList);
@@ -87,7 +89,9 @@ export function TeamRadio() {
     <div className="relative flex h-full flex-col font-f1">
       <TranscriptBar />
       {!list.length ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No team radio yet</div>
+        <div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-muted-foreground">
+          {freeFeed ? "Team radio comes with your F1 TV sign-in (Sessions → Sign in to F1 TV)" : "No team radio yet"}
+        </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           {list.map((c) => {

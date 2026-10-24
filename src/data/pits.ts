@@ -1,7 +1,7 @@
 // Pit stops, caught as they happen: entry/exit from TimingData's InPit flag, the
 // official pit-lane time from PitLaneTimeCollection (each entry only lingers a few
 // seconds), and the stationary time estimated from car data (speed at zero), since
-// F1's own stop times aren't in MultiViewer's API. Like lap history, it covers what
+// F1's own stop times aren't in the timing feed. Like lap history, it covers what
 // Pit Wall has seen.
 
 import { create } from "zustand";

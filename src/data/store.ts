@@ -5,6 +5,8 @@ import type { LiveClock, LiveState } from "./types";
 export const MAX_SELECTED = 5;
 
 export type SourceKind = "live" | "replay";
+/** Where the board's data comes from: F1's live feed, F1's archive, or a recording file (dev) */
+export type Via = "f1" | "archive" | "file";
 export type SourceStatus = "idle" | "connecting" | "connected" | "waiting" | "offline" | "loading" | "ready" | "error";
 
 export interface ReplayInfo {
@@ -19,6 +21,7 @@ export interface ReplayInfo {
 
 interface PitwallStore {
   source: SourceKind;
+  via: Via;
   status: SourceStatus;
   error: string | null;
   /** Topics except Position/CarData (those go to buffers.ts). Unchanged topics keep their reference. */
@@ -33,6 +36,7 @@ interface PitwallStore {
 
 export const usePitwall = create<PitwallStore>((set) => ({
   source: "live",
+  via: "f1",
   status: "idle",
   error: null,
   live: {},
@@ -53,7 +57,7 @@ export function setWallNow(fn: () => number) {
   wallNow = fn;
 }
 
-/** Current track time (epoch ms) on MultiViewer's clock, i.e. in sync with the video. */
+/** Current track time (epoch ms): what the board shows, behind real time by the live delay */
 export function trackNow(): number {
   const clock = usePitwall.getState().clock;
   if (!clock) return wallNow();

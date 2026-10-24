@@ -1,6 +1,5 @@
-// Session catalogue: the season's schedule from OpenF1 (past, live and upcoming), and
-// the F1 TV content behind each session so MultiViewer can open it. OpenF1, F1 TV and
-// F1's timing archive share F1's meeting/session keys (F1 TV: emfAttributes.MeetingSessionKey).
+// Session catalogue: the season's schedule from OpenF1 (past, live and upcoming), or
+// F1's archive index while OpenF1 is closed. Both use F1's meeting/session keys.
 
 import { ArchiveAuthError, archiveYear, type ArchiveIndex } from "../data/archive";
 import { parseGmtOffset, parseUtc } from "../lib/format";
@@ -33,9 +32,6 @@ export interface Meeting {
 export type SessionState = "upcoming" | "live" | "past";
 
 const OPENF1 = "https://api.openf1.org/v1";
-// F1 TV's catalogue sends no CORS headers: host permission in the extension, proxy in dev
-const F1TV = import.meta.env.DEV ? "/f1tv" : "https://f1tv.formula1.com";
-const SEARCH_PAGE = 5234; // F1 TV's search page id (as MultiViewer uses it)
 // Sessions often run past their scheduled end (red flags, delays)
 const LIVE_GRACE_MS = 45 * 60_000;
 
@@ -155,53 +151,4 @@ export async function loadSeason(year: number): Promise<{ meetings: Meeting[]; s
     }
     throw err;
   }
-}
-
-interface F1TVMetadata {
-  contentId: number;
-  contentSubtype?: string;
-  title?: string;
-  emfAttributes?: { MeetingKey?: string; MeetingSessionKey?: string };
-}
-
-function collect(o: unknown, out: F1TVMetadata[]) {
-  if (Array.isArray(o)) o.forEach((v) => collect(v, out));
-  else if (o && typeof o === "object") {
-    const m = (o as { metadata?: F1TVMetadata }).metadata;
-    if (m?.contentId && m.emfAttributes) out.push(m);
-    Object.values(o).forEach((v) => collect(v, out));
-  }
-}
-
-const contentCache = new Map<number, string>();
-
-/** F1 TV refused the catalogue request (its firewall rejects pages served from localhost) */
-export class CatalogRefused extends Error {}
-
-/** F1 TV content id of a session's main replay (or live) video, or null if F1 TV has none yet */
-export async function findContentId(session: Session, meeting: Meeting): Promise<string | null> {
-  const hit = contentCache.get(session.key);
-  if (hit) return hit;
-  let refused = 0;
-  const terms = [meeting.country, meeting.location, meeting.name];
-  for (const term of terms) {
-    const res = await fetch(`${F1TV}/2.0/R/ENG/WEB_DASH/ALL/PAGE/${SEARCH_PAGE}/PREMIUM/2?search=${encodeURIComponent(term)}`);
-    if (!res.ok) {
-      refused++;
-      continue;
-    }
-    const found: F1TVMetadata[] = [];
-    collect(await res.json(), found);
-    // The session itself, not its highlights or the pre/post shows (those use other keys)
-    const match = found
-      .filter((m) => m.emfAttributes?.MeetingSessionKey === String(session.key))
-      .filter((m) => /^(REPLAY|LIVE)$/i.test(m.contentSubtype ?? ""))
-      .sort((a, b) => Number(/LIVE/i.test(b.contentSubtype ?? "")) - Number(/LIVE/i.test(a.contentSubtype ?? "")))[0];
-    if (match) {
-      contentCache.set(session.key, String(match.contentId));
-      return String(match.contentId);
-    }
-  }
-  if (refused === terms.length) throw new CatalogRefused("F1 TV refused the lookup");
-  return null;
 }

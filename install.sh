@@ -83,7 +83,7 @@ else
   say "     ${dim}(the folder path is on your clipboard: $DEST)${reset}"
   say "  ${bold}3${reset}  Pin Pit Wall from the puzzle menu and click it"
   say ""
-  say "  Then open ${bold}Sessions${reset} and ${bold}Sign in${reset} with your F1 TV account to load past sessions."
+  say "  Then open ${bold}Sessions${reset} → ${bold}Sign in to F1 TV${reset} for replays, cars on the map, telemetry and team radio."
 fi
 say "  ${dim}Update anytime by running the same command again.${reset}"
 say ""

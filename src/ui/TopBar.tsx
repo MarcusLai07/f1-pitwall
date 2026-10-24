@@ -1,20 +1,21 @@
-import { useRef, useState } from "react";
-import { feedDelay, trackNow, usePitwall } from "../data/store";
+import { useState } from "react";
+import { useLiveSettings } from "../data/liveSettings";
+import { feedDelay, trackNow, usePitwall, type Via } from "../data/store";
 import { TRACK_STATUS, cn, formatDuration, parseDuration, parseGmtOffset, parseUtc, trackClock } from "../lib/format";
 import { useLayout } from "../layout/layoutStore";
 import { WIDGETS, type WidgetId } from "../widgets/registry";
 import { useTicker } from "./hooks";
 import { HeaderWeather } from "./HeaderWeather";
 import { currentScale, useUiScale } from "./scale";
+import { useF1Account } from "../sessions/f1account";
 import { SessionPicker } from "../sessions/SessionPicker";
 
 interface Props {
   onGoLive: () => void;
-  onOpenRecording: (file: File) => void;
   onOpenArchive: (path: string, name: string) => void;
 }
 
-export function TopBar({ onGoLive, onOpenRecording, onOpenArchive }: Props) {
+export function TopBar({ onGoLive, onOpenArchive }: Props) {
   const view = useLayout((s) => s.view);
   const compact = view === "panel";
   return (
@@ -23,7 +24,7 @@ export function TopBar({ onGoLive, onOpenRecording, onOpenArchive }: Props) {
       <SessionClock />
       <HeaderWeather compact={compact} />
       <div className="ml-auto flex items-center gap-2">
-        <SourceStatus onGoLive={onGoLive} onOpenRecording={onOpenRecording} compact={compact} />
+        <SourceStatus onGoLive={onGoLive} compact={compact} />
         <SessionsButton onGoLive={onGoLive} onOpenArchive={onOpenArchive} />
         <LayoutMenu />
       </div>
@@ -108,13 +109,18 @@ function Field({ label, value, zone, accent }: { label: string; value: string; z
   );
 }
 
-function SourceStatus({ onGoLive, onOpenRecording, compact }: Omit<Props, "onOpenArchive"> & { compact: boolean }) {
+const FROM: Record<Via, string> = { f1: "F1", archive: "F1 TV archive", file: "Recording" };
+
+/** What the board shows and where it comes from; its menu sets the live delay */
+function SourceStatus({ onGoLive, compact }: Pick<Props, "onGoLive"> & { compact: boolean }) {
   useTicker(1);
   const source = usePitwall((s) => s.source);
+  const via = usePitwall((s) => s.via);
   const status = usePitwall((s) => s.status);
   const error = usePitwall((s) => s.error);
   const loading = usePitwall((s) => s.replay?.loadProgress);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const signedIn = useF1Account((s) => s.state === "signed-in");
+  const [open, setOpen] = useState(false);
   const delay = feedDelay();
 
   const dot =
@@ -129,61 +135,92 @@ function SourceStatus({ onGoLive, onOpenRecording, compact }: Omit<Props, "onOpe
     status === "error"
       ? "Couldn't load"
       : source === "replay"
-      ? loading != null
-        ? `Loading ${Math.round(loading * 100)}%`
-        : "Replay"
-      : status === "connected"
-        ? "Live"
-        : status === "offline"
-          ? "MultiViewer offline"
-          : status === "waiting"
-            ? "No live session"
-            : "Connecting";
+        ? loading != null
+          ? `Loading ${Math.round(loading * 100)}%`
+          : "Replay"
+        : status === "connected"
+          ? "Live"
+          : status === "offline"
+            ? "Offline"
+            : status === "waiting"
+              ? "No live session"
+              : "Connecting";
+  const from = via === "f1" ? (signedIn ? "F1 TV" : "F1 free feed") : FROM[via];
 
   return (
-    <div className="flex items-center gap-1.5">
-      <span
-        className="flex items-center gap-1.5 rounded-md border border-zinc-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300"
-        title={
-          source === "live"
-            ? error ?? "Reading MultiViewer's live timing at localhost:10101. The delay matches MultiViewer's video."
-            : error ?? undefined
-        }
+    <div className="relative flex items-center gap-1.5">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 rounded-md border border-zinc-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-600"
+        title={error ?? "Where the data comes from"}
       >
         <i className={cn("h-1.5 w-1.5 rounded-full", dot)} />
         {label}
+        <span className="font-semibold normal-case tracking-normal text-zinc-400">· {from}</span>
         {source === "live" && status === "connected" && delay != null && !compact && (
           <span className="font-semibold normal-case tracking-normal text-zinc-500">{Math.round(delay / 1000)} s behind</span>
         )}
-      </span>
-      {source === "replay" ? (
-        <BarButton onClick={onGoLive}>Go live</BarButton>
-      ) : (
-        <BarButton onClick={() => fileRef.current?.click()} title="Replay a recording made with npm run record">
-          Replay…
-        </BarButton>
+        <span className="text-zinc-500">▾</span>
+      </button>
+      {source === "replay" && <BarButton onClick={onGoLive}>Go live</BarButton>}
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <SourceMenu />
+        </>
       )}
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".gz,.ndjson,.jsonl"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onOpenRecording(f);
-          e.target.value = "";
-        }}
-      />
+    </div>
+  );
+}
+
+function SourceMenu() {
+  const { delaySec, setDelay } = useLiveSettings();
+  const source = usePitwall((s) => s.source);
+  const via = usePitwall((s) => s.via);
+  const error = usePitwall((s) => s.error);
+  const signedIn = useF1Account((s) => s.state === "signed-in");
+  return (
+    <div className="absolute right-0 top-8 z-50 w-72 rounded-lg border border-zinc-800 bg-zinc-950 p-2.5 font-f1 text-[11px] leading-snug text-zinc-400 shadow-xl">
+      {source === "replay" ? (
+        <p>
+          <span className="font-semibold text-zinc-100">{via === "archive" ? "A past session from F1's archive" : "A recording"}</span>, played back.
+          Space plays and pauses; <span className="text-zinc-200">Go live</span> switches back.
+        </p>
+      ) : (
+        <>
+          <p className="font-semibold text-zinc-100">{signedIn ? "F1's live timing, with your F1 TV login" : "F1's free live timing feed"}</p>
+          <p className="mt-0.5">
+            {signedIn
+              ? "Timing, cars on the map, telemetry and team radio, straight from F1."
+              : "Timing, sectors and race control. Sign in to F1 TV (in Sessions) for cars on the map, telemetry and team radio."}
+          </p>
+          <div className="mt-2 flex items-center gap-1 text-xs text-zinc-300">
+            <span className="flex-1">Delay</span>
+            {[-5, -1].map((d) => (
+              <button key={d} onClick={() => setDelay(delaySec + d)} className="h-6 w-7 rounded border border-zinc-700 text-[10px] hover:bg-zinc-800">
+                {d}
+              </button>
+            ))}
+            <span className="w-10 text-center tabular-nums">{delaySec} s</span>
+            {[1, 5].map((d) => (
+              <button key={d} onClick={() => setDelay(delaySec + d)} className="h-6 w-7 rounded border border-zinc-700 text-[10px] hover:bg-zinc-800">
+                +{d}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-[10px] text-zinc-500">F1's feed runs ahead of most video streams. Raise the delay until the timing matches what you're watching.</p>
+        </>
+      )}
+      {error && <p className="mt-1.5 text-[10px] text-amber-400">{error}</p>}
     </div>
   );
 }
 
 function SessionsButton({ onGoLive, onOpenArchive }: Pick<Props, "onGoLive" | "onOpenArchive">) {
   const [open, setOpen] = useState(false);
-  const source = usePitwall((s) => s.source);
   return (
     <div className="relative">
-      <BarButton onClick={() => setOpen((o) => !o)} title="Past, live and upcoming sessions">
+      <BarButton onClick={() => setOpen((o) => !o)} title="Past, live and upcoming sessions, and your F1 TV sign-in">
         Sessions
       </BarButton>
       {open && (
@@ -191,8 +228,7 @@ function SessionsButton({ onGoLive, onOpenArchive }: Pick<Props, "onGoLive" | "o
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <SessionPicker
             onClose={() => setOpen(false)}
-            // Whatever MultiViewer plays is what Live mode shows
-            onWatching={() => source !== "live" && onGoLive()}
+            onGoLive={onGoLive}
             onOpenArchive={(path, name) => {
               setOpen(false);
               onOpenArchive(path, name);

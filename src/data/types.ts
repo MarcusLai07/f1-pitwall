@@ -1,5 +1,4 @@
-// F1 live timing topics as MultiViewer's f1LiveTimingState returns them (already
-// merged and decoded). Only the fields Pit Wall reads are typed; the feed sends more.
+// F1 live timing topics, as F1's feed and archive build them up (merged and decoded). Only the fields Pit Wall reads are typed; the feed sends more.
 
 export interface SessionInfo {
   Key?: number;
@@ -155,8 +154,8 @@ export interface LiveState {
   [topic: string]: unknown;
 }
 
-/** MultiViewer's live timing clock: track time T matches system time S, and runs
- *  forward from there unless paused. Times are epoch milliseconds. */
+/** The board's clock: track time T matches system time S, and runs forward from there
+ *  unless paused. Times are epoch milliseconds. Recordings carry MultiViewer's. */
 export interface LiveClock {
   paused: boolean;
   systemTime: number;

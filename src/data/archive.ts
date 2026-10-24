@@ -1,5 +1,5 @@
 // Past sessions straight from F1's timing archive (livetiming.formula1.com/static),
-// signed in with F1 TV: timing, map and telemetry without MultiViewer (no video).
+// signed in with F1 TV: timing, map, telemetry and team radio (no video).
 // A session is a folder of per-topic .jsonStream files, one line per update: the time
 // since the archive started ("HH:MM:SS.mmm"), then a JSON patch (base64 raw-deflate for
 // the .z topics). This turns them into a Recording the replay engine plays.
@@ -213,7 +213,8 @@ function* streamLines(text: string): Generator<[number, string]> {
   }
 }
 
-async function inflate(b64: string): Promise<string> {
+/** Decodes a .z topic payload (base64 raw deflate) to its JSON text */
+export async function inflate(b64: string): Promise<string> {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Pit Wall",
-  "version": "0.2.0",
-  "description": "One rearrangeable window for F1 timing, map and telemetry: live via MultiViewer, past sessions with your F1 TV sign-in.",
+  "version": "0.3.0",
+  "description": "One rearrangeable window for F1 timing, map and telemetry, live and past sessions, straight from F1 with your F1 TV sign-in.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -16,7 +16,6 @@
     "cookies"
   ],
   "host_permissions": [
-    "http://localhost:10101/*",
     "https://*.formula1.com/*",
     "https://api.openf1.org/*"
   ],

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ARCHIVE_BASE, loadArchive } from "./data/archive";
 import { sessionKind } from "./data/derive";
-import { startLive } from "./data/multiviewer";
+import { startF1Live } from "./data/f1live";
+import { loadLiveSettings, useLiveSettings } from "./data/liveSettings";
 import { loadRecording, startReplay, type Recording, type ReplayControls } from "./data/replay";
-import { usePitwall } from "./data/store";
+import { usePitwall, type Via } from "./data/store";
 import { Board } from "./layout/Board";
 import { useLayout } from "./layout/layoutStore";
 import type { View } from "./layout/defaults";
-import { watchF1Account } from "./sessions/f1account";
+import { useF1Account, watchF1Account } from "./sessions/f1account";
 import { ReplayBar } from "./ui/ReplayBar";
 import { scaleFor, setCurrentScale, useUiScale } from "./ui/scale";
 import { TopBar } from "./ui/TopBar";
@@ -46,23 +47,33 @@ export function App() {
     loadLayout(view, kind);
   }, [view, kind, loadLayout]);
 
+  // Whether the running live feed was started signed in, to restart it when that changes
+  const liveRef = useRef<{ signedIn: boolean } | null>(null);
+
   const goLive = useCallback(() => {
     loadIdRef.current++;
     stopRef.current?.();
     setControls(null);
-    stopRef.current = startLive();
+    liveRef.current = { signedIn: useF1Account.getState().state === "signed-in" };
+    stopRef.current = startF1Live(() => useLiveSettings.getState().delaySec * 1000);
   }, []);
 
-  useEffect(watchF1Account, []);
+  // Signing in or out switches between F1's full feed and its free one
+  const signedIn = useF1Account((s) => s.state === "signed-in");
+  useEffect(() => {
+    if (liveRef.current && liveRef.current.signedIn !== signedIn) goLive();
+  }, [signedIn, goLive]);
 
   const openReplay = useCallback(
-    async (name: string, load: (onProgress: (fraction: number) => void) => Promise<Recording>) => {
+    async (name: string, via: Via, load: (onProgress: (fraction: number) => void) => Promise<Recording>) => {
       const loadId = ++loadIdRef.current;
       stopRef.current?.();
       stopRef.current = null;
+      liveRef.current = null;
       setControls(null);
       usePitwall.setState({
         source: "replay",
+        via,
         status: "loading",
         error: null,
         live: {},
@@ -87,25 +98,30 @@ export function App() {
 
   const openRecording = useCallback(
     (src: File | string) =>
-      openReplay(typeof src === "string" ? src.split("/").pop() ?? src : src.name, (p) => loadRecording(src, p)),
+      openReplay(typeof src === "string" ? src.split("/").pop() ?? src : src.name, "file", (p) => loadRecording(src, p)),
     [openReplay]
   );
 
   /** A past session from F1's timing archive, by its folder path */
   const openArchive = useCallback(
-    (path: string, name: string, base = ARCHIVE_BASE) => openReplay(name, (p) => loadArchive(path, p, base)),
+    (path: string, name: string, base = ARCHIVE_BASE) => openReplay(name, "archive", (p) => loadArchive(path, p, base)),
     [openReplay]
   );
 
   useEffect(() => {
+    let alive = true;
+    // Live mode needs the saved delay and the F1 TV sign-in before it starts
+    const ready = Promise.all([loadLiveSettings(), watchF1Account()]);
     const params = new URLSearchParams(location.search);
     const replay = params.get("replay");
     const archive = params.get("archive");
     if (replay) openRecording(replay);
     // Dev: ?archive=<session path>&archiveBase=/recordings/archive/ plays a saved copy
     else if (archive) openArchive(archive, archive, (import.meta.env.DEV && params.get("archiveBase")) || ARCHIVE_BASE);
-    else goLive();
+    else ready.then(() => alive && goLive());
     return () => {
+      alive = false;
+      liveRef.current = null;
       loadIdRef.current++;
       stopRef.current?.();
       stopRef.current = null;
@@ -130,7 +146,7 @@ export function App() {
       className="flex flex-col bg-background text-foreground"
       style={{ zoom: scale, width: viewport.w / scale, height: viewport.h / scale }}
     >
-      <TopBar onGoLive={goLive} onOpenRecording={openRecording} onOpenArchive={openArchive} />
+      <TopBar onGoLive={goLive} onOpenArchive={openArchive} />
       {layoutReady && <Board />}
       {controls && <ReplayBar controls={controls} />}
     </div>

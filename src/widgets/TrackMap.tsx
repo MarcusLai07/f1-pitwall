@@ -1,6 +1,6 @@
 // Adapted from f1-dashboard's components/circuit/CircuitMap.tsx + CircuitMapLive.tsx.
-// Car positions come from the Position buffer, interpolated at MultiViewer's track
-// time every animation frame, so the cars move in step with the video.
+// Car positions come from the Position buffer, interpolated at the board's track time
+// every animation frame, so the cars move in step with the timing.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -10,6 +10,7 @@ import { useTrackShape, type TrackShape } from "./trackShape";
 import { MapBanners } from "./MapBanners";
 import { positionAt } from "../data/buffers";
 import { buildRows } from "../data/derive";
+import { useFreeFeed } from "../data/liveSettings";
 import { trackNow, usePitwall } from "../data/store";
 import { createCircuitScene, type SceneHandle } from "../circuit3d/scene";
 import { createOrbitControls, type OrbitControls } from "../circuit3d/controls";
@@ -24,6 +25,8 @@ export function TrackMap() {
   const { shape, status } = useTrackShape();
   // While a new shape is being built, the stored one would put cars in the wrong place
   const building = status === "building";
+  // F1's free feed has no car positions
+  const freeFeed = useFreeFeed();
 
   if (!shape) {
     return (
@@ -35,6 +38,11 @@ export function TrackMap() {
   return (
     <MapScene key={`${shape.key}:${shape.source}`} shape={shape} hideCars={building}>
       <MapBanners />
+      {freeFeed && (
+        <span className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 rounded-md border border-zinc-700 bg-zinc-950/90 px-3 py-1.5 text-[11px] text-zinc-300">
+          Cars on the map come with your F1 TV sign-in (Sessions → Sign in to F1 TV)
+        </span>
+      )}
       {building && (
         <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border border-zinc-700 bg-zinc-950/90 px-3 py-1.5 text-[11px] text-zinc-300">
           This layout doesn't match the stored map · building it from live positions…

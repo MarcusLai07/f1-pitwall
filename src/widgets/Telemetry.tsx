@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { carAt, carHistory, type CarSample } from "../data/buffers";
 import { trackNow, usePitwall } from "../data/store";
 import { buildRows } from "../data/derive";
+import { useFreeFeed } from "../data/liveSettings";
 import { cn, isLightColor } from "../lib/format";
 import { telemetryColumns } from "../layout/defaults";
 import { useLayout } from "../layout/layoutStore";
@@ -16,6 +17,7 @@ const TRACE_MS = 20_000;
 
 export function Telemetry() {
   useTicker(8);
+  const freeFeed = useFreeFeed();
   const live = usePitwall((s) => s.live);
   const selected = usePitwall((s) => s.selected);
   const leader = useMemo(() => buildRows(live)[0]?.num, [live.TimingData, live.DriverList]);
@@ -26,7 +28,7 @@ export function Telemetry() {
   const at = trackNow();
   const GAP = 14;
 
-  if (isWindow && nums.length) {
+  if (isWindow && nums.length && !freeFeed) {
     // Same card width as the two-across layout, however many cars are shown
     const cardW = columns === 2 ? (size.width - 6 - GAP) / 2 : size.width - 6;
     return (
@@ -51,7 +53,11 @@ export function Telemetry() {
         gridTemplateRows: `repeat(${Math.max(1, Math.ceil(nums.length / columns))}, minmax(0, 1fr))`,
       }}
     >
-      {nums.length ? (
+      {freeFeed ? (
+        <div className="flex items-center justify-center px-4 text-center text-sm text-muted-foreground">
+          Telemetry comes with your F1 TV sign-in (Sessions → Sign in to F1 TV)
+        </div>
+      ) : nums.length ? (
         nums.map((num) => <DriverCard key={num} num={num} at={at} isLeaderFallback={!selected.length} compact={columns === 2} />)
       ) : (
         <div className="flex items-center justify-center text-sm text-muted-foreground">Waiting for car data</div>
