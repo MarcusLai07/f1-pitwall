@@ -61,6 +61,26 @@ body {
   transition-delay: 0ms;
 }
 
+/* Fastest lap / new leader banners drop in at the top of the track map */
+@keyframes map-banner {
+  0% {
+    transform: translate(-50%, -140%);
+    opacity: 0;
+  }
+  8%,
+  90% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -140%);
+    opacity: 0;
+  }
+}
+.map-banner {
+  animation: map-banner 4500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
 /* Race control notifications pop up from the drawer bar */
 @keyframes toast-in {
   from {

@@ -1,6 +1,7 @@
 // Adapted from f1-dashboard's components/live/TelemetryPanel.tsx. The trace comes from
-// the CarData buffer (every ~250 ms sample). The widget's height is set by Board from
-// its card rows; cards sit two across when there's room (layout/defaults.ts).
+// the CarData buffer (every ~250 ms sample). Up to five cars: in the window the widget
+// holds two cards (newest selection on the right) and cards 3–5 open out to the left,
+// floating over whatever sits there. The side panel wraps them into rows instead.
 
 import { useMemo } from "react";
 import { carAt, carHistory, type CarSample } from "../data/buffers";
@@ -8,6 +9,7 @@ import { trackNow, usePitwall } from "../data/store";
 import { buildRows } from "../data/derive";
 import { cn, isLightColor } from "../lib/format";
 import { telemetryColumns } from "../layout/defaults";
+import { useLayout } from "../layout/layoutStore";
 import { useSize, useTicker } from "../ui/hooks";
 
 const TRACE_MS = 20_000;
@@ -18,9 +20,27 @@ export function Telemetry() {
   const selected = usePitwall((s) => s.selected);
   const leader = useMemo(() => buildRows(live)[0]?.num, [live.TimingData, live.DriverList]);
   const [ref, size] = useSize<HTMLDivElement>();
+  const isWindow = useLayout((s) => s.view) === "window";
   const nums = selected.length ? selected : leader ? [leader] : [];
   const columns = telemetryColumns(size.width, nums.length);
   const at = trackNow();
+  const GAP = 14;
+
+  if (isWindow && nums.length) {
+    // Same card width as the two-across layout, however many cars are shown
+    const cardW = columns === 2 ? (size.width - 6 - GAP) / 2 : size.width - 6;
+    return (
+      <div ref={ref} className="relative h-full">
+        <div className="absolute inset-y-[3px] right-[3px] flex flex-row-reverse" style={{ gap: GAP }}>
+          {nums.map((num, i) => (
+            <div key={num} className="h-full" style={{ width: cardW }}>
+              <DriverCard num={num} at={at} isLeaderFallback={!selected.length} compact={columns === 2} floating={i >= columns} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -40,14 +60,32 @@ export function Telemetry() {
   );
 }
 
-function DriverCard({ num, at, isLeaderFallback, compact }: { num: string; at: number; isLeaderFallback: boolean; compact: boolean }) {
+function DriverCard({
+  num,
+  at,
+  isLeaderFallback,
+  compact,
+  floating = false,
+}: {
+  num: string;
+  at: number;
+  isLeaderFallback: boolean;
+  compact: boolean;
+  floating?: boolean;
+}) {
   const d = usePitwall((s) => s.live.DriverList?.[num]);
   const color = d?.TeamColour ? `#${d.TeamColour}` : "#808080";
   const c = carAt(num, at);
   const history = carHistory(num, at - TRACE_MS, at);
 
   return (
-    <div className="flex min-h-0 flex-col gap-2 overflow-hidden rounded-lg bg-secondary/60 p-2.5 font-f1">
+    <div
+      className={cn(
+        "flex h-full min-h-0 flex-col gap-2 overflow-hidden rounded-lg p-2.5 font-f1",
+        // Cards outside the widget sit over other widgets, so they need a solid face
+        floating ? "bg-zinc-900 shadow-2xl shadow-black/70 ring-1 ring-zinc-700" : "bg-secondary/60"
+      )}
+    >
       <div className="flex items-center gap-2">
         <span
           className="rounded px-1.5 py-0.5 text-[13px] font-bold"

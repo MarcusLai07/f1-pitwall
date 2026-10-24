@@ -5,6 +5,7 @@ import { parseUtc } from "../lib/format";
 import { ingestCarData, ingestPositions, resetBuffers } from "./buffers";
 import { apply, diff } from "./diff";
 import { bumpLaps, feedLaps, resetLaps } from "./laps";
+import { bumpPits, feedPits, resetPits } from "./pits";
 import { replaceTopics, setWallNow, trackNow, usePitwall } from "./store";
 import type { CarDataFrame, LiveClock, LiveState, PositionFrame } from "./types";
 
@@ -158,6 +159,7 @@ export function startReplay(rec: Recording): ReplayControls {
   setWallNow(now);
   resetBuffers();
   resetLaps();
+  resetPits();
 
   const publish = (force = false) => {
     const t = performance.now();
@@ -175,17 +177,24 @@ export function startReplay(rec: Recording): ReplayControls {
       // Lap history: replay every frame since the last one fed, or rebuild after a jump back
       if (i < lapsFed) {
         resetLaps();
+        resetPits();
         lapsFed = -1;
       }
       let added = false;
+      let pits = false;
       for (let f = lapsFed + 1; f <= i; f++) {
-        if (f > 0 && frames[f].state.TimingData === frames[f - 1].state.TimingData) continue;
-        added = feedLaps(frames[f].state.TimingData, frames[f].state.TimingAppData, false) || added;
+        const fr = frames[f];
+        if (f > 0 && fr.state.TimingData === frames[f - 1].state.TimingData && fr.state.PitLaneTimeCollection === frames[f - 1].state.PitLaneTimeCollection) continue;
+        added = feedLaps(fr.state.TimingData, fr.state.TimingAppData, false) || added;
+        // Track time of that frame, from its own clock
+        const at = fr.clock ? fr.clock.trackTime + (fr.t - fr.clock.systemTime) : fr.t;
+        pits = feedPits(fr.state.TimingData, fr.state.PitLaneTimeCollection, at, false) || pits;
       }
       lapsFed = i;
       if (added) bumpLaps();
+      if (pits) bumpPits();
       idx = i;
-      replaceTopics(frames[i].state, frames[i].clock);
+      replaceTopics(frames[i].state, frames[i].clock, seeking);
     }
     const tn = trackNow();
     if (seeking) {

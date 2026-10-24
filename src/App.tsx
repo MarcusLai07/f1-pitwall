@@ -7,24 +7,30 @@ import { Board } from "./layout/Board";
 import { useLayout } from "./layout/layoutStore";
 import type { View } from "./layout/defaults";
 import { ReplayBar } from "./ui/ReplayBar";
+import { scaleFor, setCurrentScale, useUiScale } from "./ui/scale";
 import { TopBar } from "./ui/TopBar";
 
 const baseView: View = document.documentElement.dataset.view === "panel" ? "panel" : "window";
 // Below this width the window uses the one-column side-panel layout
 const NARROW_PX = 760;
 
-function useView(): View {
-  const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_PX);
+function useViewport() {
+  const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   useEffect(() => {
-    const onResize = () => setNarrow(window.innerWidth < NARROW_PX);
+    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  return baseView === "panel" || narrow ? "panel" : "window";
+  return size;
 }
 
 export function App() {
-  const view = useView();
+  const viewport = useViewport();
+  const view: View = baseView === "panel" || viewport.w < NARROW_PX ? "panel" : "window";
+  // The window view zooms with the window height; the side panel only takes the user factor
+  const factor = useUiScale((s) => s.factor);
+  const scale = scaleFor(viewport.h, factor, view === "window");
+  setCurrentScale(scale);
   const kind = usePitwall((s) => sessionKind(s.live.SessionInfo));
   const layoutReady = useLayout((s) => s.ready);
   const loadLayout = useLayout((s) => s.load);
@@ -100,7 +106,11 @@ export function App() {
   }, [controls]);
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div
+      id="pitwall-root"
+      className="flex flex-col bg-background text-foreground"
+      style={{ zoom: scale, width: viewport.w / scale, height: viewport.h / scale }}
+    >
       <TopBar onGoLive={goLive} onOpenRecording={openRecording} />
       {layoutReady && <Board />}
       {controls && <ReplayBar controls={controls} />}

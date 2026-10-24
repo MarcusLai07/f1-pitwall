@@ -147,6 +147,8 @@ export interface LiveState {
   WeatherData?: Weather;
   WeatherDataSeries?: { Series?: { Timestamp: string; Weather: Weather }[] };
   TeamRadio?: { Captures?: { Utc: string; RacingNumber: string; Path: string }[] };
+  /** Each entry lingers a few seconds after a stop, then the feed clears it */
+  PitLaneTimeCollection?: { PitTimes?: Record<string, { RacingNumber?: string; Duration?: string; Lap?: string }> };
   Position?: { Position?: PositionFrame[] };
   CarData?: { Entries?: CarDataFrame[] };
   Heartbeat?: { Utc?: string };
@@ -176,6 +178,7 @@ export const TOPICS = [
   "WeatherData",
   "WeatherDataSeries",
   "TeamRadio",
+  "PitLaneTimeCollection",
   "Position",
   "CarData",
   "Heartbeat",

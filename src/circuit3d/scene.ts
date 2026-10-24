@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createTimer, engine } from "animejs";
+import { currentScale } from "../ui/scale";
 import "animejs/adapters/three";
 
 // Headless-verification hook: lets tooling tick animations manually when the
@@ -59,7 +60,8 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
   const { width, height } = opts;
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // The UI may be zoomed (ui/scale.ts): render at the pixels the canvas really covers
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio * currentScale(), 3));
   renderer.setSize(width, height);
   host.insertBefore(renderer.domElement, host.firstChild);
 

@@ -11,8 +11,9 @@ import { useSize, useTicker } from "../ui/hooks";
 import { TyrePopover } from "./TyrePopover";
 
 // One width per column, shared by the header and every cell so they line up exactly
-const WIDE = { driver: 108, gap: 72, interval: 66, last: 86, best: 86, tyre: 58, pits: 40, sector: 68, live: 134, theo: 78 };
-const COMPACT = { ...WIDE, driver: 98, gap: 66, last: 78, best: 78, tyre: 56 };
+// Sized so Speed · Pedals still fits a 13-column tower on a 16:10 laptop (~770 px)
+const WIDE = { driver: 98, gap: 66, interval: 62, last: 80, best: 80, tyre: 54, pits: 38, sector: 62, live: 120, theo: 72 };
+const COMPACT = { ...WIDE, driver: 94, gap: 62, last: 76, best: 76, tyre: 52 };
 type Widths = typeof WIDE;
 const PAD = 16; // row padding, px-2 each side
 
@@ -95,7 +96,7 @@ export function TimingTower() {
               {s}
             </span>
           ))}
-        {cols.live && <span style={col(w.live)} className="pl-3">Speed · Pedals</span>}
+        {cols.live && <span style={col(w.live)} className="pl-2">Speed · Pedals</span>}
         {cols.theo && <span style={col(w.theo)} className="pr-2 text-right">Theo</span>}
       </div>
       <div className="flex flex-1 flex-col overflow-y-auto" onScroll={() => setTyreFor(null)}>
@@ -350,12 +351,12 @@ function LiveCells({ num, width }: { num: string; width: number }) {
   useTicker(5);
   const c = carAt(num, trackNow());
   return (
-    <div style={col(width)} className="flex items-center gap-2 pl-3">
-      <span className="w-[62px] shrink-0 text-right text-[13px] font-bold tabular-nums text-zinc-100">
+    <div style={col(width)} className="flex items-center gap-2 pl-2">
+      <span className="w-[56px] shrink-0 text-right text-[13px] font-bold tabular-nums text-zinc-100">
         {c ? c.speed : "—"}
         <span className="ml-0.5 text-[9px] font-semibold text-zinc-500">km/h</span>
       </span>
-      <div className="flex w-[52px] flex-col gap-[3px]">
+      <div className="flex w-[48px] flex-col gap-[3px]">
         <div className="h-[5px] overflow-hidden rounded-sm bg-zinc-800">
           <div className="h-full bg-green-500" style={{ width: `${c?.throttle ?? 0}%` }} />
         </div>

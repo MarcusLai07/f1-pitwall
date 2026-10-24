@@ -5,6 +5,7 @@ import { useLayout } from "../layout/layoutStore";
 import { WIDGETS, type WidgetId } from "../widgets/registry";
 import { useTicker } from "./hooks";
 import { HeaderWeather } from "./HeaderWeather";
+import { currentScale, useUiScale } from "./scale";
 
 interface Props {
   onGoLive: () => void;
@@ -184,7 +185,9 @@ function LayoutMenu() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-8 z-50 w-48 rounded-lg border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+          <div className="absolute right-0 top-8 z-50 w-52 rounded-lg border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+            <UiSize />
+            <div className="my-1 h-px bg-zinc-800" />
             <MenuItem
               onClick={() => {
                 setLocked(!locked);
@@ -225,6 +228,28 @@ function LayoutMenu() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Multiplies the automatic fit-to-window scale */
+function UiSize() {
+  const { factor, setFactor } = useUiScale();
+  const step = (d: number) => setFactor(factor + d);
+  return (
+    <div className="flex items-center gap-1 px-2 py-1.5 text-xs text-zinc-300">
+      <span className="flex-1" title={`Fits the window automatically; this adjusts it (now ${Math.round(currentScale() * 100)}% zoom)`}>
+        UI size
+      </span>
+      <button onClick={() => step(-0.1)} className="h-6 w-6 rounded border border-zinc-700 hover:bg-zinc-800" aria-label="Smaller">
+        −
+      </button>
+      <button onClick={() => setFactor(1)} className="w-12 rounded py-0.5 text-center tabular-nums hover:bg-zinc-800" title="Back to automatic">
+        {factor === 1 ? "Auto" : `${Math.round(factor * 100)}%`}
+      </button>
+      <button onClick={() => step(0.1)} className="h-6 w-6 rounded border border-zinc-700 hover:bg-zinc-800" aria-label="Larger">
+        +
+      </button>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import * as THREE from "three";
 import type { CircuitGeometry } from "../circuits/geometry-schema";
 import { applySim } from "../circuit3d/autoAlign";
 import { useTrackShape, type TrackShape } from "./trackShape";
+import { MapBanners } from "./MapBanners";
 import { positionAt } from "../data/buffers";
 import { buildRows } from "../data/derive";
 import { trackNow, usePitwall } from "../data/store";
@@ -33,6 +34,7 @@ export function TrackMap() {
   }
   return (
     <MapScene key={`${shape.key}:${shape.source}`} shape={shape} hideCars={building}>
+      <MapBanners />
       {building && (
         <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border border-zinc-700 bg-zinc-950/90 px-3 py-1.5 text-[11px] text-zinc-300">
           This layout doesn't match the stored map · building it from live positions…

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { createAnimatable, utils, animate } from "animejs";
 import type { SceneHandle } from "./scene";
+import { currentScale } from "../ui/scale";
 import {
   IDLE_SPIN_DELAY_MS,
   IDLE_SPIN_RATE,
@@ -95,8 +96,9 @@ export function createOrbitControls(handle: SceneHandle, opts: OrbitOptions): Or
   };
   const move = (e: PointerEvent) => {
     if (!mode) return;
-    const dx = e.clientX - px;
-    const dy = e.clientY - py;
+    // Pointer deltas are screen pixels; the scene is laid out in zoomed UI pixels
+    const dx = (e.clientX - px) / currentScale();
+    const dy = (e.clientY - py) / currentScale();
     px = e.clientX;
     py = e.clientY;
     if (mode === "rotate") {

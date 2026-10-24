@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import type { LiveClock, LiveState } from "./types";
 
+// Telemetry shows up to five cars
+export const MAX_SELECTED = 5;
+
 export type SourceKind = "live" | "replay";
 export type SourceStatus = "idle" | "connecting" | "connected" | "waiting" | "offline" | "loading" | "ready" | "error";
 
@@ -21,8 +24,10 @@ interface PitwallStore {
   /** Topics except Position/CarData (those go to buffers.ts). Unchanged topics keep their reference. */
   live: LiveState;
   clock: LiveClock | null;
-  selected: string[]; // racing numbers, most recent first
+  selected: string[]; // racing numbers, most recent first (up to MAX_SELECTED)
   replay: ReplayInfo | null;
+  /** Bumped on a replay seek or source switch: jumps that aren't events (no banners) */
+  resync: number;
   toggleSelected: (num: string) => void;
 }
 
@@ -34,9 +39,10 @@ export const usePitwall = create<PitwallStore>((set) => ({
   clock: null,
   selected: [],
   replay: null,
+  resync: 0,
   toggleSelected: (num) =>
     set((s) => ({
-      selected: s.selected.includes(num) ? s.selected.filter((n) => n !== num) : [num, ...s.selected].slice(0, 4),
+      selected: s.selected.includes(num) ? s.selected.filter((n) => n !== num) : [num, ...s.selected].slice(0, MAX_SELECTED),
     })),
 }));
 
@@ -79,8 +85,8 @@ export function commitTopics(next: LiveState, clock: LiveClock | null) {
   usePitwall.setState(changed ? { live: merged, clock } : { clock });
 }
 
-/** Replace the whole state (replay seeks/frames). Callers pass structurally shared states. */
-export function replaceTopics(next: LiveState, clock: LiveClock | null) {
+/** Replace the whole state (replay frames). `jump` marks a seek rather than playback. */
+export function replaceTopics(next: LiveState, clock: LiveClock | null, jump = false) {
   topicCache.clear();
-  usePitwall.setState({ live: next, clock });
+  usePitwall.setState((s) => ({ live: next, clock, resync: jump ? s.resync + 1 : s.resync }));
 }

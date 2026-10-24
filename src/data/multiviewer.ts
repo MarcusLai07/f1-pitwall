@@ -3,7 +3,8 @@
 
 import { ingestCarData, ingestPositions, resetBuffers } from "./buffers";
 import { feedLaps, resetLaps } from "./laps";
-import { commitTopics, setWallNow, usePitwall } from "./store";
+import { feedPits, resetPits } from "./pits";
+import { commitTopics, setWallNow, trackNow, usePitwall } from "./store";
 import { TOPICS, type LiveClock, type LiveState } from "./types";
 
 const ENDPOINT = import.meta.env.DEV ? "/mv/api/graphql" : "http://localhost:10101/api/graphql";
@@ -52,6 +53,7 @@ export function startLive(): () => void {
 
   resetBuffers();
   resetLaps();
+  resetPits();
   setWallNow(() => Date.now());
   usePitwall.setState({ source: "live", status: "connecting", error: null, replay: null, live: {}, clock: null });
 
@@ -72,6 +74,7 @@ export function startLive(): () => void {
         if (full) {
           commitTopics(state, clock);
           feedLaps(state.TimingData, state.TimingAppData);
+          feedPits(state.TimingData, state.PitLaneTimeCollection, trackNow());
         } else usePitwall.setState({ clock });
         if (usePitwall.getState().status !== "connected") usePitwall.setState({ status: "connected", error: null });
       }
