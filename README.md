@@ -1,6 +1,17 @@
+<div align="center">
+
 # Pit Wall
 
-One rearrangeable window for following F1 sessions: timing tower, 3D track map, telemetry, team radio with transcripts, race control and sector leaderboard, with weather and the session clocks in the header. It's a Chromium extension (built for Dia; works in Chrome, Arc, Brave and Edge) that opens as its own resizable window, with a compact side-panel view too.
+**F1 live timing, track map and telemetry in one window you arrange yourself.**<br>
+Live and past sessions, straight from F1 with your F1 TV login.
+
+A browser extension for Chrome, Edge, Brave, Arc, Opera, Vivaldi, Dia and other Chromium browsers
+
+<img src="docs/media/demo.gif" width="800" alt="Pit Wall replaying a practice session: picking drivers opens their telemetry, then the tyre history, the 3D map, race control and the session list">
+
+<sub>[▶ Watch in full quality (MP4)](docs/media/demo.mp4)</sub>
+
+</div>
 
 ## Install in one line (macOS)
 
@@ -8,7 +19,7 @@ One rearrangeable window for following F1 sessions: timing tower, 3D track map, 
 curl -fsSL https://raw.githubusercontent.com/MarcusLai07/f1-pitwall/main/install.sh | bash
 ```
 
-It downloads the latest release to `~/PitWall`, copies that folder's path to your clipboard and opens your browser's extensions page. Then:
+It downloads the latest release to `~/PitWall`, copies that folder's path to your clipboard and opens your browser's extensions page: your default browser if it's Chromium-based, otherwise the first Chromium browser it finds. Then:
 
 1. Turn on **Developer mode** (top right).
 2. Click **Load unpacked** → press **⌘⇧G** → **⌘V** → Return → **Select**.
@@ -17,17 +28,57 @@ It downloads the latest release to `~/PitWall`, copies that folder's path to you
 **Update:** run the same line again, then click ↻ on Pit Wall in the extensions page.
 
 <details>
-<summary><b>Windows, Linux, other options and uninstall</b></summary>
+<summary><b>Windows, Linux, other browsers, options and uninstall</b></summary>
 
 <br>
 
 | | |
 |---|---|
-| Without the script | Download `pit-wall.zip` from [the latest release](https://github.com/MarcusLai07/f1-pitwall/releases/latest), unzip it somewhere it can stay, and pick that folder in **Load unpacked**. To update, unzip the new one over it and click ↻. |
+| Any OS, any Chromium browser | Download `pit-wall.zip` from [the latest release](https://github.com/MarcusLai07/f1-pitwall/releases/latest) and unzip it somewhere it can stay. Open the browser's extensions page (`chrome://extensions`, `edge://extensions`, `brave://extensions`, `opera://extensions`, `vivaldi://extensions`…), turn on **Developer mode**, click **Load unpacked** and pick that folder. To update, unzip the new one over it and click ↻. |
+| A different browser (macOS) | `curl -fsSL …/install.sh \| PITWALL_BROWSER="Brave Browser" bash` opens that browser's extensions page instead |
+| Several browsers | Load the same folder in each. Each browser keeps its own F1 TV sign-in and layouts. |
 | Somewhere else | `… \| bash -s -- --dir ~/Apps/PitWall` |
 | Uninstall | `… \| bash -s -- --uninstall`, then remove Pit Wall from the extensions page |
 
 **Why the manual click?** Browsers only let you add an extension outside their store through *Load unpacked*. No script is allowed to do it for you.
+
+</details>
+
+## What it does
+
+<img src="docs/media/window.png" alt="The whole board: timing tower with mini-sectors, 3D track map with every car, sector leaderboard, telemetry for two drivers, team radio and the weather strip">
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/media/telemetry.png" alt="Telemetry cards for four drivers, the extra two opening out to the left over the timing tower">
+<b>Telemetry for up to five cars.</b> Click drivers in the timing tower for their speed, gear, RPM, throttle and brake. Two cards sit in the widget; the rest open out to the left at the same size.
+</td>
+<td width="50%" valign="top">
+<img src="docs/media/sessions.png" alt="The Sessions panel with the season's sessions and the F1 TV sign-in form">
+<b>Every session, live or past.</b> Follow a live session, or replay any past one from F1's archive. Sign in with your F1 account: the password goes only to F1.
+</td>
+</tr>
+<tr>
+<td valign="top">
+<img src="docs/media/tyres.png" alt="A driver's tyre history: each set, its laps and best lap, with the pit stops in between">
+<b>Tyre history.</b> Click a driver's tyre: every set, new or used, the laps run on it, its best lap, and each pit stop in between.
+</td>
+<td valign="top">
+<img src="docs/media/drawer.png" alt="The drawer under the timing tower open on lap times">
+<b>Race control and lap data.</b> A drawer under the tower holds race control, investigations, track limits, every lap time and the race trace. New messages pop up above it.
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>The side panel view</b></summary>
+
+<br>
+
+<img src="docs/media/sidepanel.png" width="300" alt="Pit Wall's compact one-column view in the browser's side panel">
+
+Right-click Pit Wall's toolbar button → **Open in side panel** for a one-column view next to whatever you're browsing (in browsers with Chrome's side panel, such as Chrome, Edge and Brave).
 
 </details>
 
@@ -46,12 +97,12 @@ Straight from F1, in your browser. Pit Wall has no server.
 - **Source chip** (top right, e.g. *Live · F1 TV · 3 s behind* or *Replay · F1 TV archive*): what the board shows and where it comes from. Click it to set the live delay.
 - **Toolbar button:** opens Pit Wall in its own window (or focuses it). The window remembers its size and position.
 - **Any screen:** the window is laid out for a ~900 px tall screen and scales to the real one, so a big monitor gets the same layout, just larger; other aspect ratios only stretch the columns. Nothing scrolls: widgets resize to fit the height. **Layout → UI size** makes everything bigger or smaller.
-- **Right-click the toolbar button → Open in side panel:** the compact one-column view. Narrow windows (under 760 px) use it too.
+- **Right-click the toolbar button → Open in side panel:** the compact one-column view, in browsers that have Chrome's side panel (Chrome, Edge, Brave and others). Narrow windows (under 760 px) use the same layout.
 - **Header:** session time remaining, **Track time** (the circuit's time zone) next to **Your time** (the same moment in your time zone), and a weather strip.
 - **Timing tower:** mini-sectors sit under each sector time. Click a driver's tyre for their tyre history: every set, new or used, the laps run on it and its best lap, with each pit stop in between (official pit-lane time, plus the time stood still estimated from car data, ±0.3 s). Live, stops are timed from when Pit Wall starts watching; sessions loaded from F1's archive have every stop.
 - **Click drivers** in the timing tower to select them (up to five). Telemetry shows the two most recent in the widget; cars 3–5 open out to its left as floating cards of the same size. The map highlights them and **follow** tracks the most recent one.
 - **Track map:** drag to move it, right-drag (or Shift + drag) to rotate and tilt, scroll to zoom, double-click or **fit** to frame the whole track again. A new fastest lap (provisional pole in Q3) and, in races, a new leader drop in as banners at the top of the map. It checks the stored track shape against where cars actually drive: if F1 has moved the coordinate frame it re-aligns the shape, and if the layout doesn't match at all (or there's no stored shape) it draws the track from a live lap instead. The result is remembered per circuit and season.
-- **Team radio:** play any clip. Set **Transcripts** to *Standard* (about 250 MB) or *Light* (about 80 MB) to transcribe clips on your Mac with OpenAI's Whisper; the model downloads once and transcripts are kept.
+- **Team radio:** play any clip. Set **Transcripts** to *Standard* (about 250 MB) or *Light* (about 80 MB) to transcribe clips on your computer with OpenAI's Whisper, right in the browser; the model downloads once and transcripts are kept.
 - **Drawer** (under the timing tower): Race control, Investigations (each incident's latest status and any penalty), Track limits (strikes per driver), Lap times (every lap by driver, with tyres) and Race trace (gap to the leader by lap; lap times in practice and qualifying). New race control messages pop up above it; click one to open its tab. Live, lap times and race trace start from when Pit Wall starts watching; sessions loaded from F1's archive have every lap.
 - **Layout:** hover the top edge of a widget to slide its title bar down, then drag it to move and resize from the edges. The grid moves in steps of one timing row, and the tower stops growing at the last driver. The **Layout** menu adds or removes widgets, locks the layout, switches between *snap upward* (default) and *free placement*, and resets to the default.
 
@@ -69,12 +120,14 @@ npm run dev     # dev page
 npm run build   # the extension, in dist/ (Load unpacked → dist)
 ```
 
-The dev page opens on [localhost:5288/window.html](http://localhost:5288/window.html) (or `/sidepanel.html`). The dev server proxies `/f1live` to F1's live feed and `/f1static` to its archive, because neither sends CORS headers; the built extension uses `host_permissions` instead. The dev page can't read cookies, so F1 TV sign-in only works in the extension.
+The dev page opens on [localhost:5288/window.html](http://localhost:5288/window.html) (or `/sidepanel.html`). The dev server proxies `/f1live` to F1's live feed and `/f1static` to its archive, because neither sends CORS headers; the built extension uses `host_permissions` instead. F1 TV sign-in only works in the built extension, which has host permissions for F1's sign-in service; the dev page shows *F1 TV · extension only*.
 
 - `?replay=/recordings/<file>` loads an older MultiViewer recording (gzip NDJSON, one state per line) from `recordings/`.
 - `?archive=<session path>&archiveBase=/recordings/archive/` plays a saved copy of an archive session, e.g. `recordings/archive/2024/2024-10-27_Mexico_City_Grand_Prix/2024-10-27_Race/` holding its `.jsonStream` files.
 
-**Releasing:** bump the version, then `git tag v0.3.0 && git push origin v0.3.0`. The Release workflow builds the extension, stamps the tag's version into its manifest and attaches `pit-wall.zip` to a GitHub release, which `install.sh` downloads.
+**Releasing:** bump the version in `package.json` and `public/manifest.json`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow builds the extension, stamps the tag's version into its manifest and attaches `pit-wall.zip` to a GitHub release, which `install.sh` downloads.
+
+**README media:** `npm run build && node scripts/capture-media.mjs recordings/<recording>.ndjson.gz` records `docs/media` (the screenshots, `demo.mp4` and `demo.gif`) by driving the built extension in headless Chrome for Testing through a saved session. F1's sign-in is answered with stand-ins, so nothing is sent to F1. Needs ffmpeg; `CHROME=` picks another browser binary.
 
 Code map:
 
