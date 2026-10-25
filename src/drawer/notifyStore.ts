@@ -5,7 +5,7 @@ import { trackNow, usePitwall } from "../data/store";
 import type { RaceControlMessage } from "../data/types";
 import { parseUtc } from "../lib/format";
 
-export type DrawerTab = "racecontrol" | "investigations" | "limits" | "laps" | "trace";
+export type DrawerTab = "racecontrol" | "investigations" | "limits" | "laps" | "trace" | "racebrief";
 
 export interface Toast {
   id: string;
@@ -21,7 +21,7 @@ interface NotifyStore {
   dismiss: (id: string) => void;
 }
 
-const NO_UNREAD: Record<DrawerTab, number> = { racecontrol: 0, investigations: 0, limits: 0, laps: 0, trace: 0 };
+const NO_UNREAD: Record<DrawerTab, number> = { racecontrol: 0, investigations: 0, limits: 0, laps: 0, trace: 0, racebrief: 0 };
 
 export const useNotify = create<NotifyStore>((set) => ({
   open: null,

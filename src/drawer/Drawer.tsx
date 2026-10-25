@@ -9,6 +9,7 @@ import { cn, parseGmtOffset, parseUtc, trackClock } from "../lib/format";
 import { InvestigationsPanel, RaceControlPanel, TrackLimitsPanel, messageColor } from "./Panels";
 import { RaceTracePanel } from "./RaceTrace";
 import { LapTimesPanel } from "./LapTimes";
+import { RaceBriefPanel } from "./RaceBrief";
 import { useNotify, useRaceControlNotifications, type DrawerTab } from "./notifyStore";
 
 const TABS: { id: DrawerTab; label: string }[] = [
@@ -45,6 +46,7 @@ export function Drawer({ left, width }: { left: number; width: number }) {
         {open === "limits" && <TrackLimitsPanel />}
         {open === "laps" && <LapTimesPanel />}
         {open === "trace" && <RaceTracePanel />}
+        {open === "racebrief" && <RaceBriefPanel />}
       </div>
       <div
         className="pointer-events-auto flex items-center gap-1 border-x border-t border-zinc-800 bg-zinc-950/95 px-1.5 backdrop-blur"
@@ -76,10 +78,24 @@ export function Drawer({ left, width }: { left: number; width: number }) {
             </button>
           );
         })}
+        <span className="mx-1 ml-auto h-4 w-px bg-zinc-800" />
+        <button
+          onClick={() => openTab(open === "racebrief" ? null : "racebrief")}
+          title="Pre-race brief: weather, what's at stake, circuit guide"
+          className={cn(
+            "relative flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors",
+            open === "racebrief" ? "bg-zinc-800 text-white" : "text-amber-300/90 hover:bg-zinc-900 hover:text-amber-200",
+            open !== "racebrief" && "race-brief-beam"
+          )}
+        >
+          <span aria-hidden>◗</span>
+          Race brief
+          {open === "racebrief" && <span className="absolute inset-x-2 -bottom-[5px] h-[2px] rounded bg-amber-400" />}
+        </button>
         {open && (
           <button
             onClick={() => openTab(null)}
-            className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-900 hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-900 hover:text-white"
             title="Close drawer"
           >
             ▾

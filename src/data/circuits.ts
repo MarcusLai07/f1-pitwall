@@ -15,7 +15,15 @@ export interface CircuitData {
   name: string;
   shortName: string;
   location: string;
+  country?: string;
   length: number; // km
+  turns?: number;
+  laps?: number;
+  raceDistance?: number; // km
+  firstGP?: number;
+  pitLaneTimeLoss?: number; // seconds
+  drsZones?: unknown[];
+  records?: { lapRecord?: { time?: string; driver?: string; year?: number } };
   svg?: { path?: string };
   corners?: CircuitCorner[];
 }
@@ -51,6 +59,15 @@ const BY_SHORT_NAME: Record<string, string> = {
   "yas island": "yas-marina",
   zandvoort: "zandvoort",
 };
+
+/** Stored circuit id from a circuit short name (F1's) and a location hint, or null */
+export function circuitIdFromName(shortName: string | undefined, location?: string): string | null {
+  const short = shortName?.toLowerCase().trim();
+  const ids = Object.keys(circuitFiles).map((p) => p.split("/").pop()!.replace(".json", ""));
+  const named = (hay: string) => ids.find((id) => hay.includes(id.replace(/-/g, " "))) ?? null;
+  if (short) return BY_SHORT_NAME[short] ?? named(short);
+  return location ? named(location.toLowerCase()) : null;
+}
 
 export function circuitIdFor(info: SessionInfo | undefined): string | null {
   const short = info?.Meeting?.Circuit?.ShortName?.toLowerCase().trim();
