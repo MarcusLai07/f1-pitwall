@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pit Wall installer for macOS. One command installs, the same command updates:
+# Pit Wall installer for macOS. Pit Wall runs in Chrome and other Chromium browsers
+# (Edge, Brave, Arc, Opera, Vivaldi, Dia, ...). One command installs, the same command updates:
 #
 #   curl -fsSL https://raw.githubusercontent.com/MarcusLai07/f1-pitwall/main/install.sh | bash
 #
@@ -63,14 +64,41 @@ rsync -a --delete "$TMP/ext/" "$DEST/"
 if [[ -n "$PREVIOUS" && "$PREVIOUS" != "$VERSION" ]]; then done_ "Updated $PREVIOUS → $VERSION in $DEST"
 else done_ "Pit Wall $VERSION in $DEST"; fi
 
-BROWSER="${PITWALL_BROWSER:-}" # set to "none" to skip opening a browser (and the clipboard)
+# ---------- open a Chromium browser's extensions page ----------
+# Your default browser if it's Chromium-based, otherwise the first one installed.
+# PITWALL_BROWSER="App Name" picks one; "none" skips this (and the clipboard).
+CHROMIUM_IDS="com.google.chrome com.google.chrome.beta com.google.chrome.canary com.microsoft.edgemac com.brave.browser company.thebrowser.browser company.thebrowser.dia com.vivaldi.vivaldi com.operasoftware.opera com.operasoftware.operagx org.chromium.chromium"
+CHROMIUM_APPS=("Google Chrome" "Microsoft Edge" "Brave Browser" "Arc" "Dia" "Vivaldi" "Opera" "Opera GX" "Chromium")
+BROWSER="${PITWALL_BROWSER:-}"
+BROWSER_ID=""
 [[ "$BROWSER" == none ]] || printf '%s' "$DEST" | pbcopy 2>/dev/null || true
-if [[ -z "$BROWSER" ]]; then
-  for b in "Dia" "Google Chrome" "Arc" "Brave Browser" "Microsoft Edge" "Chromium"; do
-    [[ -d "/Applications/$b.app" ]] && { BROWSER="$b"; break; }
-  done
+if [[ -n "$BROWSER" && "$BROWSER" != none ]]; then
+  BROWSER_ID="$(osascript -e "id of app \"$BROWSER\"" 2>/dev/null || true)"
+elif [[ -z "$BROWSER" ]]; then
+  DEFAULT_ID="$(defaults read com.apple.LaunchServices/com.apple.launchservices.secure LSHandlers 2>/dev/null \
+    | awk '/LSHandlerRoleAll/{id=$3} /LSHandlerURLScheme = https;/{print id; exit}' | tr -d '";' | tr '[:upper:]' '[:lower:]')"
+  if [[ -n "$DEFAULT_ID" && " $CHROMIUM_IDS " == *" $DEFAULT_ID "* ]]; then
+    BROWSER_ID="$DEFAULT_ID"
+  else
+    for b in "${CHROMIUM_APPS[@]}"; do
+      if [[ -d "/Applications/$b.app" ]]; then BROWSER_ID="$(osascript -e "id of app \"$b\"" 2>/dev/null || true)"; break; fi
+    done
+  fi
 fi
-if [[ -n "$BROWSER" && "$BROWSER" != none ]]; then open -a "$BROWSER" "chrome://extensions" 2>/dev/null || true; fi
+if [[ -n "$BROWSER_ID" ]]; then
+  BROWSER="$(mdfind "kMDItemCFBundleIdentifier == '$BROWSER_ID'c" 2>/dev/null | head -1 | xargs -I{} basename {} .app)"
+  case "$(printf '%s' "$BROWSER_ID" | tr '[:upper:]' '[:lower:]')" in
+    com.microsoft.edgemac) EXT_URL="edge://extensions" ;;
+    com.operasoftware.*) EXT_URL="opera://extensions" ;;
+    com.vivaldi.vivaldi) EXT_URL="vivaldi://extensions" ;;
+    *) EXT_URL="chrome://extensions" ;;
+  esac
+  open -b "$BROWSER_ID" "$EXT_URL" 2>/dev/null || true
+elif [[ "$BROWSER" != none ]]; then
+  BROWSER=""
+  say ""
+  say "  ${dim}No Chromium browser found. Pit Wall runs in Chrome, Edge, Brave, Arc, Opera, Vivaldi or Dia.${reset}"
+fi
 
 say ""
 if [[ -n "$PREVIOUS" ]]; then

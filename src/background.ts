@@ -1,12 +1,14 @@
 // Toolbar button opens Pit Wall in its own resizable window (or focuses it).
-// Right-clicking the button offers the side panel instead.
+// Right-clicking the button offers the side panel instead, in browsers that have
+// Chrome's side panel (not every Chromium browser does).
 
 const BOUNDS_KEY = "windowBounds";
 const WINDOW_ID_KEY = "windowId";
 const PANEL_MENU_ID = "open-side-panel";
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+  if (!chrome.sidePanel) return;
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
   chrome.contextMenus.create({ id: PANEL_MENU_ID, title: "Open in side panel", contexts: ["action"] });
 });
 
@@ -33,7 +35,7 @@ chrome.action.onClicked.addListener(async () => {
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === PANEL_MENU_ID && tab?.windowId !== undefined) {
-    chrome.sidePanel.open({ windowId: tab.windowId });
+    chrome.sidePanel?.open({ windowId: tab.windowId });
   }
 });
 
