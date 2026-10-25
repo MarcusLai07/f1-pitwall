@@ -7,7 +7,8 @@ import { cn } from "../lib/format";
 import { useChampionship } from "../sessions/championship";
 import { ensureSeason, useNextSession } from "../sessions/schedule";
 import type { Meeting, Session } from "../sessions/catalog";
-import { useRaceWeather } from "./raceWeather";
+import { usePitwall } from "../data/store";
+import { useRaceWeather, useRaceStrategy } from "./raceWeather";
 
 const day = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -37,6 +38,8 @@ export function RaceBriefPanel() {
       <div className="grid gap-2 md:grid-cols-2">
         <WeatherCard location={meeting.location || meeting.circuit} startMs={race?.start} />
         <StakeCard meeting={meeting} />
+        <StrategyCard location={meeting.location || meeting.circuit} />
+        <TyresCard />
         <CircuitCard meeting={meeting} />
       </div>
     </div>
@@ -125,6 +128,101 @@ function StakeCard({ meeting }: { meeting: Meeting }) {
         </div>
       ) : (
         <p className="text-[12px] text-zinc-500">Loading standings…</p>
+      )}
+    </Section>
+  );
+}
+
+const COMPOUND = ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"];
+const COMPOUND_SHORT: Record<string, string> = { SOFT: "S", MEDIUM: "M", HARD: "H", INTERMEDIATE: "I", WET: "W" };
+const COMPOUND_COLOR: Record<string, string> = { SOFT: "#ef4444", MEDIUM: "#eab308", HARD: "#e5e7eb", INTERMEDIATE: "#22c55e", WET: "#3b82f6" };
+
+function StrategyCard({ location }: { location: string }) {
+  const { strategy, loading } = useRaceStrategy(location);
+  return (
+    <Section title="Likely strategy">
+      {loading ? (
+        <p className="text-[12px] text-zinc-500">Reading past races…</p>
+      ) : !strategy ? (
+        <p className="text-[12px] text-zinc-500">No pit-stop history for this circuit yet.</p>
+      ) : (
+        <div>
+          <p className="text-[13px] font-bold text-zinc-100">
+            Typically a {strategy.typical}-stop race
+          </p>
+          <p className="mt-0.5 text-[11px] text-zinc-400">
+            {strategy.season}:{" "}
+            {Object.entries(strategy.stops)
+              .sort((a, b) => Number(a[0]) - Number(b[0]))
+              .map(([n, c]) => `${c} ran ${n}`)
+              .join(" · ")}
+          </p>
+          <p className="mt-1 text-[9px] text-zinc-600">From the last race here · Jolpica</p>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+interface TyreUse {
+  code: string;
+  color: string;
+  used: { compound: string; n: number }[];
+}
+
+/** Fresh tyre sets each driver has used in the session now loaded (the feed only tracks
+ *  the current session, so this is "used so far", not the full weekend allocation). */
+function useSessionTyres(): TyreUse[] | null {
+  const app = usePitwall((s) => s.live.TimingAppData);
+  const drivers = usePitwall((s) => s.live.DriverList);
+  const source = usePitwall((s) => s.source);
+  return useMemo(() => {
+    if (source !== "live" && source !== "replay") return null;
+    const lines = app?.Lines;
+    if (!lines || !drivers) return null;
+    const out: TyreUse[] = [];
+    for (const [num, line] of Object.entries(lines)) {
+      const d = drivers[num];
+      if (!d) continue;
+      const counts = new Map<string, number>();
+      for (const st of line.Stints ?? []) {
+        if (st.New === "true" && st.Compound) counts.set(st.Compound, (counts.get(st.Compound) ?? 0) + 1);
+      }
+      if (!counts.size) continue;
+      out.push({
+        code: d.Tla,
+        color: d.TeamColour ? `#${d.TeamColour}` : "#808080",
+        used: COMPOUND.filter((c) => counts.has(c)).map((c) => ({ compound: c, n: counts.get(c)! })),
+      });
+    }
+    return out.length ? out : null;
+  }, [app, drivers, source]);
+}
+
+function TyresCard() {
+  const tyres = useSessionTyres();
+  return (
+    <Section title="Tyre sets used (this session)">
+      {!tyres ? (
+        <p className="text-[12px] text-zinc-500">Shows during a session, once cars run. F1 only sends tyre sets for the live session, not the full weekend.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+          {tyres.map((t) => (
+            <div key={t.code} className="flex items-center gap-1.5 text-[11px]">
+              <span className="w-8 font-bold text-zinc-200" style={{ color: t.color }}>
+                {t.code}
+              </span>
+              <span className="flex gap-1">
+                {t.used.map((u) => (
+                  <span key={u.compound} className="tabular-nums" style={{ color: COMPOUND_COLOR[u.compound] }}>
+                    {u.n}
+                    {COMPOUND_SHORT[u.compound] ?? "?"}
+                  </span>
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
     </Section>
   );

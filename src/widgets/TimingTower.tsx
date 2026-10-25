@@ -199,15 +199,16 @@ const TimingRow = memo(function TimingRow({
         >
           {row.tla}
         </span>
-        {isRace && positionChange !== 0 && (
+        {isRace && row.grid && row.grid !== row.position && (
           <span
+            title={`Started P${row.grid}`}
             className={cn(
-              "ml-1 flex h-[18px] min-w-[22px] items-center justify-center rounded px-0.5 text-[10px] font-bold text-white",
-              positionChange > 0 ? "bg-green-600" : "bg-red-600"
+              "ml-1 flex h-[18px] min-w-[22px] items-center justify-center rounded px-0.5 text-[10px] font-bold",
+              row.grid > row.position ? "bg-green-600/80 text-white" : "bg-red-600/80 text-white"
             )}
           >
-            {positionChange > 0 ? "▲" : "▼"}
-            {Math.abs(positionChange)}
+            {row.grid > row.position ? "▲" : "▼"}
+            {Math.abs(row.grid - row.position)}
           </span>
         )}
       </div>

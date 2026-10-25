@@ -81,7 +81,7 @@ export interface Stint {
 }
 
 export interface TimingAppData {
-  Lines?: Record<string, { RacingNumber?: string; Line?: number; Stints?: Stint[] }>;
+  Lines?: Record<string, { RacingNumber?: string; Line?: number; GridPos?: string; Stints?: Stint[] }>;
 }
 
 export interface TimingStats {

@@ -45,6 +45,7 @@ export interface DriverRow {
   stints: Stint[];
   laps: number;
   pitStops: number;
+  grid?: number; // starting grid slot (races)
   theoretical: string; // sum of best sectors
   knockedOut: boolean;
 }
@@ -141,6 +142,7 @@ function computeRows(live: LiveState): DriverRow[] {
       stints: app[num]?.Stints ?? [],
       laps: line.NumberOfLaps ?? 0,
       pitStops: line.NumberOfPitStops ?? 0,
+      grid: Number(app[num]?.GridPos) || undefined,
       theoretical: theo,
       knockedOut: !!line.KnockedOut,
     });

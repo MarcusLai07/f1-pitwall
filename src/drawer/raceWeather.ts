@@ -5,44 +5,53 @@
 
 import { useEffect, useState } from "react";
 
-// lat, lon by race locality (lowercased) — from Jolpica's circuit locations. Keyed by
-// city because the schedule's own circuit ids and the stored-circuit ids don't line up.
-const COORDS: Record<string, [number, number]> = {
-  melbourne: [-37.8497, 144.968],
-  shanghai: [31.3389, 121.22],
-  suzuka: [34.8431, 136.541],
-  miami: [25.9581, -80.2389],
-  montreal: [45.5, -73.5228],
-  "monte carlo": [43.7347, 7.42056],
-  monaco: [43.7347, 7.42056],
-  barcelona: [41.57, 2.26111],
-  spielberg: [47.2197, 14.7647],
-  silverstone: [52.0786, -1.01694],
-  spa: [50.4372, 5.97139],
-  budapest: [47.5789, 19.2486],
-  zandvoort: [52.3888, 4.54092],
-  monza: [45.6156, 9.28111],
-  madrid: [40.46528, -3.61528],
-  baku: [40.3725, 49.8533],
-  "kuala lumpur": [2.76083, 101.738],
-  "marina bay": [1.2914, 103.864],
-  singapore: [1.2914, 103.864],
-  austin: [30.1328, -97.6411],
-  "mexico city": [19.4042, -99.0907],
-  "são paulo": [-23.7036, -46.6997],
-  "sao paulo": [-23.7036, -46.6997],
-  "las vegas": [36.1147, -115.173],
-  lusail: [25.49, 51.4542],
-  "abu dhabi": [24.4672, 54.6031],
+// Per race locality (lowercased): coordinates (for the weather forecast) and the Jolpica
+// circuit id (for pit-stop history). Keyed by city because the schedule's own ids and the
+// stored-circuit ids don't line up. Circuits don't move, so this is static.
+interface Place {
+  coords: [number, number];
+  jolpica: string;
+}
+const CIRCUITS: Record<string, Place> = {
+  melbourne: { coords: [-37.8497, 144.968], jolpica: "albert_park" },
+  shanghai: { coords: [31.3389, 121.22], jolpica: "shanghai" },
+  suzuka: { coords: [34.8431, 136.541], jolpica: "suzuka" },
+  miami: { coords: [25.9581, -80.2389], jolpica: "miami" },
+  montreal: { coords: [45.5, -73.5228], jolpica: "villeneuve" },
+  "monte carlo": { coords: [43.7347, 7.42056], jolpica: "monaco" },
+  monaco: { coords: [43.7347, 7.42056], jolpica: "monaco" },
+  barcelona: { coords: [41.57, 2.26111], jolpica: "catalunya" },
+  spielberg: { coords: [47.2197, 14.7647], jolpica: "red_bull_ring" },
+  silverstone: { coords: [52.0786, -1.01694], jolpica: "silverstone" },
+  spa: { coords: [50.4372, 5.97139], jolpica: "spa" },
+  budapest: { coords: [47.5789, 19.2486], jolpica: "hungaroring" },
+  zandvoort: { coords: [52.3888, 4.54092], jolpica: "zandvoort" },
+  monza: { coords: [45.6156, 9.28111], jolpica: "monza" },
+  madrid: { coords: [40.46528, -3.61528], jolpica: "madring" },
+  baku: { coords: [40.3725, 49.8533], jolpica: "baku" },
+  "kuala lumpur": { coords: [2.76083, 101.738], jolpica: "sepang" },
+  "marina bay": { coords: [1.2914, 103.864], jolpica: "marina_bay" },
+  singapore: { coords: [1.2914, 103.864], jolpica: "marina_bay" },
+  austin: { coords: [30.1328, -97.6411], jolpica: "americas" },
+  "mexico city": { coords: [19.4042, -99.0907], jolpica: "rodriguez" },
+  "são paulo": { coords: [-23.7036, -46.6997], jolpica: "interlagos" },
+  "sao paulo": { coords: [-23.7036, -46.6997], jolpica: "interlagos" },
+  "las vegas": { coords: [36.1147, -115.173], jolpica: "vegas" },
+  lusail: { coords: [25.49, 51.4542], jolpica: "losail" },
+  "abu dhabi": { coords: [24.4672, 54.6031], jolpica: "yas_marina" },
 };
 
-const strip = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+const strip = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-export function coordsFor(location: string | undefined): [number, number] | null {
+function placeFor(location: string | undefined): Place | null {
   if (!location) return null;
   const want = strip(location);
-  for (const [k, v] of Object.entries(COORDS)) if (strip(k) === want || want.includes(strip(k))) return v;
+  for (const [k, v] of Object.entries(CIRCUITS)) if (strip(k) === want || want.includes(strip(k))) return v;
   return null;
+}
+
+export function coordsFor(location: string | undefined): [number, number] | null {
+  return placeFor(location)?.coords ?? null;
 }
 
 export interface Weather {
@@ -119,4 +128,71 @@ export function useRaceWeather(location: string | undefined, startMs: number | u
     };
   }, [coords?.[0], coords?.[1], startMs]);
   return { weather, loading, unavailable };
+}
+
+const JOLPI = import.meta.env.DEV ? "/jolpi" : "https://api.jolpi.ca/ergast/f1";
+
+export interface Strategy {
+  season: number; // the season the history is from
+  stops: Record<number, number>; // stop count → how many drivers did it
+  typical: number; // the most common stop count
+  finishers: number;
+}
+
+const stratCache = new Map<string, Promise<Strategy | null>>();
+
+async function jget<T>(path: string): Promise<T | null> {
+  const r = await fetch(`${JOLPI}/${path}`);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+/** Typical stop count at a circuit, from its most recent race's pit stops (this year, else last) */
+export function strategyFor(location: string | undefined): Promise<Strategy | null> {
+  const place = placeFor(location);
+  if (!place) return Promise.resolve(null);
+  let p = stratCache.get(place.jolpica);
+  if (!p) {
+    p = (async () => {
+      const year = new Date().getFullYear();
+      for (const season of [year, year - 1]) {
+        const res = await jget<{ MRData: { RaceTable: { Races: { round: string }[] } } }>(`${season}/circuits/${place.jolpica}/results.json?limit=1`);
+        const round = res?.MRData.RaceTable.Races[0]?.round;
+        if (!round) continue;
+        const ps = await jget<{ MRData: { RaceTable: { Races: { PitStops: { driverId: string }[] }[] } } }>(`${season}/${round}/pitstops.json?limit=500`);
+        const pits = ps?.MRData.RaceTable.Races[0]?.PitStops;
+        if (!pits?.length) continue;
+        const perDriver = new Map<string, number>();
+        for (const s of pits) perDriver.set(s.driverId, (perDriver.get(s.driverId) ?? 0) + 1);
+        const stops: Record<number, number> = {};
+        for (const n of perDriver.values()) stops[n] = (stops[n] ?? 0) + 1;
+        const typical = Number(Object.entries(stops).sort((a, b) => b[1] - a[1])[0][0]);
+        return { season, stops, typical, finishers: perDriver.size };
+      }
+      return null;
+    })().catch(() => {
+      stratCache.delete(place.jolpica);
+      return null;
+    });
+    stratCache.set(place.jolpica, p);
+  }
+  return p;
+}
+
+export function useRaceStrategy(location: string | undefined): { strategy: Strategy | null; loading: boolean } {
+  const [strategy, setStrategy] = useState<Strategy | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    setStrategy(null);
+    if (!location) return;
+    let alive = true;
+    setLoading(true);
+    strategyFor(location)
+      .then((s) => alive && setStrategy(s))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [location]);
+  return { strategy, loading };
 }
