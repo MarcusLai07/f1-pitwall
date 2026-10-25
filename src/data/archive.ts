@@ -15,6 +15,9 @@ export const ARCHIVE_BASE = import.meta.env.DEV ? "/f1static/" : "https://liveti
 /** The archive wants an F1 TV sign-in (401) */
 export class ArchiveAuthError extends Error {}
 
+/** F1 accepts the sign-in but forbids this session (403): usually a region/current-season gate */
+export class ArchiveForbiddenError extends Error {}
+
 export async function archiveFetch(url: string, signal?: AbortSignal): Promise<Response> {
   const token = f1Token();
   const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal });
@@ -22,6 +25,11 @@ export async function archiveFetch(url: string, signal?: AbortSignal): Promise<R
     if (token) reportRefused(token);
     throw new ArchiveAuthError(token ? "F1 TV refused the sign-in" : "Sign in to F1 TV first");
   }
+  // 403 = signed in but not allowed. F1's replay archive only goes back about two
+  // seasons, so older ones are gone; a current session can also be region-locked until
+  // the season ends, or F1 can block a whole network. Not a sign-in problem, so the
+  // token stays.
+  if (res.status === 403) throw new ArchiveForbiddenError("F1 won't send this session (403). Its replay archive only covers about this season and last; older ones aren't available.");
   return res;
 }
 
@@ -248,7 +256,7 @@ export async function loadArchive(path: string, onProgress: (fraction: number) =
   const folder = base + path.replace(/^\/+/, "").replace(/\/?$/, "/");
   const index = await archiveJson<{ Feeds?: Record<string, unknown> }>(`${folder}Index.json`, signal).catch((err) => {
     if (signal?.aborted) throw err;
-    if (err instanceof ArchiveAuthError) throw err;
+    if (err instanceof ArchiveAuthError || err instanceof ArchiveForbiddenError) throw err;
     return null;
   });
   const listed = index?.Feeds ? new Set(Object.keys(index.Feeds)) : null;

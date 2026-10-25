@@ -191,7 +191,10 @@ export function startF1Live(delayMs: () => number): () => void {
       token = null;
       neg = await fetch(`${HUB}/negotiate?negotiateVersion=1`, { method: "POST", ...opts({ "Content-Type": "application/json" }) });
     }
-    if (!neg.ok) throw new Error(`F1 live timing answered ${neg.status}`);
+    if (!neg.ok) {
+      // 403 = F1 is blocking this connection (region or network), not a missing sign-in
+      throw new Error(neg.status === 403 ? "F1 is blocking live timing from your connection (403)" : `F1 live timing answered ${neg.status}`);
+    }
     // A first idea of F1's clock (to the second) before any update arrives, so the
     // subscribe snapshot is timed right on a machine whose clock is off
     if (!skews.length) noteSkew(Date.parse(neg.headers.get("date") ?? ""));

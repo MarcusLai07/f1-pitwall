@@ -3,7 +3,7 @@
 // map, telemetry, radio; no video); a live one is followed through F1's live feed.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArchiveAuthError, archivePath } from "../data/archive";
+import { ArchiveAuthError, ArchiveForbiddenError, archivePath } from "../data/archive";
 import { usePitwall } from "../data/store";
 import { cn } from "../lib/format";
 import { useTicker } from "../ui/hooks";
@@ -93,7 +93,14 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
       onOpenArchive(path, `${m.name} · ${s.name}`);
     } catch (err) {
       setNote({
-        text: err instanceof ArchiveAuthError ? "F1 refused the sign-in. Open formula1.com to renew it, then try again." : err instanceof Error ? err.message : String(err),
+        text:
+          err instanceof ArchiveAuthError
+            ? "F1 refused the sign-in. Open formula1.com to renew it, then try again."
+            : err instanceof ArchiveForbiddenError
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : String(err),
         bad: true,
       });
     } finally {
