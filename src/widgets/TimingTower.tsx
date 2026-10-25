@@ -84,8 +84,8 @@ export function TimingTower() {
       {/* 22 px so the tower plus N rows of 30 px fills whole grid rows (see layout/defaults.ts) */}
       <div className="flex h-[22px] shrink-0 items-center border-b border-zinc-800 bg-zinc-900/90 px-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
         <span style={col(w.driver)} className="pl-1">Driver</span>
-        {cols.gap && <span style={col(w.gap)} className="pr-2 text-right">Gap</span>}
         {cols.interval && <span style={col(w.interval)} className="pr-2 text-right">Int</span>}
+        {cols.gap && <span style={col(w.gap)} className="pr-2 text-right">Gap</span>}
         <span style={col(w.last)} className="pr-3 text-right">Last</span>
         <span style={col(w.best)} className="pr-3 text-right">Best</span>
         <span style={col(w.tyre)} className="pl-2">Tyre</span>
@@ -213,14 +213,6 @@ const TimingRow = memo(function TimingRow({
         )}
       </div>
 
-      {cols.gap && (
-        <span
-          style={col(w.gap)}
-          className={cn("pr-2 text-right text-[13px] font-bold tabular-nums", row.position === 1 ? "text-zinc-500" : "text-zinc-100")}
-        >
-          {row.position === 1 && !row.gap.startsWith("+") ? (isRace ? row.gap || "Leader" : "—") : row.gap}
-        </span>
-      )}
       {cols.interval && (
         <span
           style={col(w.interval)}
@@ -230,6 +222,14 @@ const TimingRow = memo(function TimingRow({
           )}
         >
           {row.position === 1 ? "—" : row.interval}
+        </span>
+      )}
+      {cols.gap && (
+        <span
+          style={col(w.gap)}
+          className={cn("pr-2 text-right text-[13px] font-bold tabular-nums", row.position === 1 ? "text-zinc-500" : "text-zinc-100")}
+        >
+          {row.position === 1 && !row.gap.startsWith("+") ? (isRace ? row.gap || "Leader" : "—") : row.gap}
         </span>
       )}
 

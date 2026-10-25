@@ -137,9 +137,16 @@ export interface Strategy {
   stops: Record<number, number>; // stop count → how many drivers did it
   typical: number; // the most common stop count
   finishers: number;
+  pitSeconds: number | null; // median pit-lane time loss per stop, from that race
 }
 
 const stratCache = new Map<string, Promise<Strategy | null>>();
+
+/** A pit-stop duration, "23.763" or the rare "1:12.4", in seconds */
+function pitDuration(s: string): number {
+  const m = /^(\d+):(\d+(?:\.\d+)?)$/.exec(s);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : Number(s);
+}
 
 async function jget<T>(path: string): Promise<T | null> {
   const r = await fetch(`${JOLPI}/${path}`);
@@ -159,7 +166,7 @@ export function strategyFor(location: string | undefined): Promise<Strategy | nu
         const res = await jget<{ MRData: { RaceTable: { Races: { round: string }[] } } }>(`${season}/circuits/${place.jolpica}/results.json?limit=1`);
         const round = res?.MRData.RaceTable.Races[0]?.round;
         if (!round) continue;
-        const ps = await jget<{ MRData: { RaceTable: { Races: { PitStops: { driverId: string }[] }[] } } }>(`${season}/${round}/pitstops.json?limit=500`);
+        const ps = await jget<{ MRData: { RaceTable: { Races: { PitStops: { driverId: string; duration: string }[] }[] } } }>(`${season}/${round}/pitstops.json?limit=500`);
         const pits = ps?.MRData.RaceTable.Races[0]?.PitStops;
         if (!pits?.length) continue;
         const perDriver = new Map<string, number>();
@@ -167,7 +174,10 @@ export function strategyFor(location: string | undefined): Promise<Strategy | nu
         const stops: Record<number, number> = {};
         for (const n of perDriver.values()) stops[n] = (stops[n] ?? 0) + 1;
         const typical = Number(Object.entries(stops).sort((a, b) => b[1] - a[1])[0][0]);
-        return { season, stops, typical, finishers: perDriver.size };
+        // Typical time lost in the pits: the median stop duration (robust to slow ones)
+        const durs = pits.map((s) => pitDuration(s.duration)).filter((n) => n > 0).sort((a, b) => a - b);
+        const pitSeconds = durs.length ? Math.round(durs[durs.length >> 1]) : null;
+        return { season, stops, typical, finishers: perDriver.size, pitSeconds };
       }
       return null;
     })().catch(() => {

@@ -88,11 +88,15 @@ export function Drawer({ left, width }: { left: number; width: number }) {
             open !== "racebrief" && "race-brief-beam"
           )}
         >
-          <span aria-hidden>◗</span>
+          {/* The chevron is the open/closed tell: up to pull the brief up, down to drop it */}
+          <span aria-hidden className={cn("inline-block text-[9px] leading-none transition-transform duration-300 ease-out", open !== "racebrief" && "rotate-180")}>
+            ▾
+          </span>
           Race brief
           {open === "racebrief" && <span className="absolute inset-x-2 -bottom-[5px] h-[2px] rounded bg-amber-400" />}
         </button>
-        {open && (
+        {/* Race brief has its own animated chevron, so it needs no separate close button */}
+        {open && open !== "racebrief" && (
           <button
             onClick={() => openTab(null)}
             className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-900 hover:text-white"

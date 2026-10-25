@@ -174,9 +174,14 @@ function StrategyCard({ location }: { location: string }) {
         <p className="text-[12px] text-zinc-500">No pit-stop history for this circuit yet.</p>
       ) : (
         <div>
-          <p className="text-[13px] font-bold text-zinc-100">
-            Typically a {strategy.typical}-stop race
-          </p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-[13px] font-bold text-zinc-100">Typically a {strategy.typical}-stop race</p>
+            {strategy.pitSeconds != null && (
+              <span className="text-[12px] font-bold tabular-nums text-amber-300" title="Median pit-lane time lost per stop in the last race here">
+                ~{strategy.pitSeconds}s / stop
+              </span>
+            )}
+          </div>
           <p className="mt-0.5 text-[11px] text-zinc-400">
             {strategy.season}:{" "}
             {Object.entries(strategy.stops)
