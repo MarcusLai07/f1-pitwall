@@ -39,6 +39,8 @@ const TOPICS = [
 const LOOKAHEAD_MS = 1500;
 // SignalR drops a client that's silent for 30 s
 const KEEPALIVE_MS = 15_000;
+// Largest believable difference between F1's clock and ours
+const MAX_SKEW_MS = 5 * 60_000;
 
 interface Pending {
   at: number; // server time, ms
@@ -77,9 +79,12 @@ export function startF1Live(delayMs: () => number): () => void {
   };
 
   const serverNow = () => Date.now() + skew;
+  // Only from updates as they arrive: between sessions the subscribe snapshot holds the
+  // last session's heartbeat, hours old. Anything further off than a few minutes isn't
+  // a clock difference either.
   const noteSkew = (ts: string | undefined) => {
     const t = parseUtc(ts);
-    if (!Number.isFinite(t)) return;
+    if (!Number.isFinite(t) || Math.abs(t - Date.now()) > MAX_SKEW_MS) return;
     skews.push(t - Date.now());
     if (skews.length > 40) skews.shift();
     // Latency only ever makes a message look older: the largest offset is the closest
@@ -157,7 +162,7 @@ export function startF1Live(delayMs: () => number): () => void {
       return;
     }
     if (topic === "Heartbeat") {
-      noteSkew((data as { Utc?: string } | null)?.Utc);
+      if (!replace) noteSkew((data as { Utc?: string } | null)?.Utc);
       return;
     }
     pending.push({ at, topic, data, replace });

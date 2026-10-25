@@ -8,6 +8,8 @@ import { useTicker } from "./hooks";
 import { HeaderWeather } from "./HeaderWeather";
 import { currentScale, useUiScale } from "./scale";
 import { useF1Account } from "../sessions/f1account";
+import { shortSessionName, useNextSession } from "../sessions/schedule";
+import { CalendarPanel } from "../sessions/CalendarPanel";
 import { SessionPicker } from "../sessions/SessionPicker";
 
 interface Props {
@@ -26,25 +28,45 @@ export function TopBar({ onGoLive, onOpenArchive }: Props) {
       <div className="ml-auto flex items-center gap-2">
         <SourceStatus onGoLive={onGoLive} compact={compact} />
         <SessionsButton onGoLive={onGoLive} onOpenArchive={onOpenArchive} />
+        <CalendarButton />
         <LayoutMenu />
       </div>
     </header>
   );
 }
 
+/** Live mode with nothing running: the header looks ahead to the next session instead */
+function useIdle(): boolean {
+  return usePitwall((s) => s.source === "live" && s.status !== "connected");
+}
+
 function SessionTitle({ compact }: { compact: boolean }) {
   const info = usePitwall((s) => s.live.SessionInfo);
   const track = usePitwall((s) => s.live.TrackStatus);
+  const idle = useIdle();
+  const next = useNextSession();
   const status = TRACK_STATUS[track?.Status ?? ""];
+  const title = idle && next ? { meeting: next.meeting.name, session: next.session.name } : { meeting: info?.Meeting?.Name, session: info?.Name };
   return (
     <div className="flex min-w-0 items-center gap-2.5">
+      {idle && next && (
+        <span
+          className={cn(
+            "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+            next.live ? "animate-pulse bg-f1-red text-white" : "bg-sky-500/20 text-sky-300"
+          )}
+          title={next.live ? "On now by the schedule; F1's feed hasn't started it yet" : "The next session on the calendar"}
+        >
+          {next.live ? "Now" : "Next"}
+        </span>
+      )}
       <div className="min-w-0">
         <div className={cn("truncate font-f1 font-bold text-zinc-100", compact ? "text-xs" : "text-sm")}>
-          {info?.Meeting?.Name ?? "Pit Wall"}
-          {info?.Name && <span className="text-zinc-400"> · {info.Name}</span>}
+          {title.meeting ?? "Pit Wall"}
+          {title.session && <span className="text-zinc-400"> · {title.session}</span>}
         </div>
       </div>
-      {status && (
+      {!idle && status && (
         <span
           className="shrink-0 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black"
           style={{ backgroundColor: status.color }}
@@ -60,20 +82,46 @@ function SessionClock() {
   useTicker(2);
   const clock = usePitwall((s) => s.live.ExtrapolatedClock);
   const laps = usePitwall((s) => s.live.LapCount);
-  const gmtOffset = usePitwall((s) => s.live.SessionInfo?.GmtOffset);
+  const sessionOffset = usePitwall((s) => s.live.SessionInfo?.GmtOffset);
+  const idle = useIdle();
+  const source = usePitwall((s) => s.source);
+  const next = useNextSession();
+  // Nothing running: the clocks are the real now, at the next session's circuit
+  const gmtOffset = idle ? next?.session.gmtOffset ?? sessionOffset : sessionOffset;
   const offset = parseGmtOffset(gmtOffset);
-  const now = trackNow();
+  const now = idle ? Date.now() : trackNow();
   let remaining = parseDuration(clock?.Remaining);
   if (clock?.Extrapolating) remaining -= now - parseUtc(clock.Utc);
+  const showCountdown = next && (idle || source === "replay");
   return (
     <div className="flex items-center gap-4 font-f1 tabular-nums">
-      {Number.isFinite(remaining) && <Field label="Remaining" value={formatDuration(remaining)} />}
-      {laps?.TotalLaps ? <Field label="Lap" value={`${laps.CurrentLap ?? 0}/${laps.TotalLaps}`} /> : null}
+      {!idle && Number.isFinite(remaining) && <Field label="Remaining" value={formatDuration(remaining)} />}
+      {!idle && laps?.TotalLaps ? <Field label="Lap" value={`${laps.CurrentLap ?? 0}/${laps.TotalLaps}`} /> : null}
       {/* Same moment twice: at the circuit, and in your own time zone */}
       <Field label="Track time" zone={gmtOffset ? utcLabel(offset) : undefined} value={trackClock(now, offset)} />
       <Field label="Your time" zone={localZone(now)} value={localClock(now)} accent="text-sky-200" />
+      {showCountdown &&
+        (next.live ? (
+          <Field label={shortSessionName(next.session.name)} value="On now" accent="text-f1-red" />
+        ) : (
+          <Field
+            label={`${shortSessionName(next.session.name)} in`}
+            value={countdown(next.session.start - Date.now())}
+            accent="text-amber-300"
+            title={`${next.meeting.name} · ${next.session.name}, ${new Date(next.session.start).toLocaleString()}`}
+          />
+        ))}
     </div>
   );
+}
+
+/** 28_351_000 → "7:52:31"; past a day, "2d 07:52:31" */
+function countdown(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86_400);
+  const hms = [Math.floor((s % 86_400) / 3600), Math.floor((s % 3600) / 60), s % 60];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return d ? `${d}d ${pad(hms[0])}:${pad(hms[1])}:${pad(hms[2])}` : `${hms[0]}:${pad(hms[1])}:${pad(hms[2])}`;
 }
 
 /** -18000000 -> "UTC−5" */
@@ -97,9 +145,9 @@ function localZone(epochMs: number): string | undefined {
   return localZoneName.formatToParts(epochMs).find((p) => p.type === "timeZoneName")?.value;
 }
 
-function Field({ label, value, zone, accent }: { label: string; value: string; zone?: string; accent?: string }) {
+function Field({ label, value, zone, accent, title }: { label: string; value: string; zone?: string; accent?: string; title?: string }) {
   return (
-    <div className="flex flex-col leading-tight">
+    <div className="flex flex-col leading-tight" title={title}>
       <span className="text-[9px] uppercase tracking-wider text-zinc-500">
         {label}
         {zone && <span className="ml-1 normal-case tracking-normal text-zinc-600">{zone}</span>}
@@ -274,6 +322,25 @@ function SessionsButton({ onGoLive, onOpenArchive }: Pick<Props, "onGoLive" | "o
               onOpenArchive(path, name);
             }}
           />
+        </>
+      )}
+    </div>
+  );
+}
+
+function CalendarButton() {
+  // Closing plays the panel's exit animation before it unmounts
+  const [state, setState] = useState<"closed" | "open" | "closing">("closed");
+  const close = () => setState((s) => (s === "open" ? "closing" : s));
+  return (
+    <div className="relative">
+      <BarButton onClick={() => (state === "closed" ? setState("open") : close())} title="The season calendar">
+        Calendar
+      </BarButton>
+      {state !== "closed" && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={close} />
+          <CalendarPanel closing={state === "closing"} onClose={close} onClosed={() => setState("closed")} />
         </>
       )}
     </div>

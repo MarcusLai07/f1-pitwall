@@ -31,6 +31,16 @@ export function resetLaps() {
   useLaps.setState((s) => ({ version: s.version + 1 }));
 }
 
+/**
+ * Longest real lap for this session: twice its fastest so far (five minutes before
+ * there is one). F1 times a "lap" from one line crossing to the next, so a car that sat
+ * in the garage between runs gets one like 21:43.737; anything longer is garage time.
+ */
+export function maxLapSeconds(td: TimingData | undefined): number {
+  const fastest = Math.min(...Object.values(td?.Lines ?? {}).map((l) => lapSeconds(l.BestLapTime?.Value) ?? Infinity));
+  return Number.isFinite(fastest) ? fastest * 2 : 300;
+}
+
 function parseGap(gap: string | undefined, position: number): number | null {
   if (position === 1) return 0;
   if (!gap || /L/.test(gap)) return null; // "1L", "LAP 23"
@@ -41,6 +51,7 @@ function parseGap(gap: string | undefined, position: number): number | null {
 /** Feed one TimingData snapshot (+ TimingAppData for tyres); returns true when any lap was added */
 export function feedLaps(td: TimingData | undefined, app: TimingAppData | undefined, notify = true): boolean {
   let added = false;
+  const maxLap = maxLapSeconds(td);
   for (const [num, line] of Object.entries(td?.Lines ?? {})) {
     const n = line.NumberOfLaps ?? 0;
     const prev = lastLap.get(num);
@@ -54,9 +65,10 @@ export function feedLaps(td: TimingData | undefined, app: TimingAppData | undefi
     const position = Number(line.Position) || line.Line || 99;
     let list = history.get(num);
     if (!list) history.set(num, (list = []));
+    const time = lapSeconds(line.LastLapTime?.Value);
     list.push({
       lap: n,
-      time: lapSeconds(line.LastLapTime?.Value),
+      time: time !== null && time > maxLap ? null : time,
       gap: parseGap(line.GapToLeader, position),
       position,
       compound: app?.Lines?.[num]?.Stints?.at(-1)?.Compound,

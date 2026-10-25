@@ -14,6 +14,7 @@ export interface Session {
   start: number; // epoch ms
   end: number;
   path?: string; // folder in F1's timing archive, when the schedule came from there
+  gmtOffset?: string; // the circuit's UTC offset, "-05:00:00"
 }
 
 export interface Meeting {
@@ -59,6 +60,7 @@ interface OpenF1Session {
   session_type: string;
   date_start: string;
   date_end: string;
+  gmt_offset?: string;
 }
 
 /** Where a schedule came from: OpenF1, the copy saved last time, or F1's archive (past sessions only) */
@@ -70,7 +72,7 @@ function fromArchive(index: ArchiveIndex): Meeting[] {
       const sessions = m.Sessions.filter((s) => s.Key > 0)
         .map((s) => {
           const offset = parseGmtOffset(s.GmtOffset);
-          return { key: s.Key, meetingKey: m.Key, name: s.Name, type: s.Type, start: parseUtc(s.StartDate) - offset, end: parseUtc(s.EndDate) - offset, path: s.Path };
+          return { key: s.Key, meetingKey: m.Key, name: s.Name, type: s.Type, start: parseUtc(s.StartDate) - offset, end: parseUtc(s.EndDate) - offset, path: s.Path, gmtOffset: s.GmtOffset };
         })
         .sort((a, b) => a.start - b.start);
       return {
@@ -131,6 +133,7 @@ export async function loadSeason(year: number): Promise<{ meetings: Meeting[]; s
             type: s.session_type,
             start: Date.parse(s.date_start),
             end: Date.parse(s.date_end),
+            gmtOffset: s.gmt_offset,
           }))
           .sort((a, b) => a.start - b.start),
       }))
