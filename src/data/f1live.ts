@@ -61,6 +61,7 @@ export function startF1Live(delayMs: () => number): () => void {
   let sessionKey: number | undefined;
   let clock: LiveClock = { paused: false, systemTime: 0, trackTime: -delayMs() };
   let failures = 0;
+  let subscribed = false; // the current connection got its subscribe result
 
   resetBuffers();
   setPositionHistory(null);
@@ -82,8 +83,8 @@ export function startF1Live(delayMs: () => number): () => void {
   // Only from updates as they arrive: between sessions the subscribe snapshot holds the
   // last session's heartbeat, hours old. Anything further off than a few minutes isn't
   // a clock difference either.
-  const noteSkew = (ts: string | undefined) => {
-    const t = parseUtc(ts);
+  const noteSkew = (ts: string | number | undefined) => {
+    const t = typeof ts === "number" ? ts : parseUtc(ts);
     if (!Number.isFinite(t) || Math.abs(t - Date.now()) > MAX_SKEW_MS) return;
     skews.push(t - Date.now());
     if (skews.length > 40) skews.shift();
@@ -141,6 +142,7 @@ export function startF1Live(delayMs: () => number): () => void {
     if (msg.type === 3) {
       if (msg.error) throw new Error(msg.error);
       failures = 0; // subscribed: the connection works
+      subscribed = true;
       const at = serverNow();
       for (const [topic, data] of Object.entries(msg.result ?? {})) await take(topic, data, at, true);
     } else if (msg.type === 1 && msg.target === "feed") {
@@ -156,7 +158,12 @@ export function startF1Live(delayMs: () => number): () => void {
     if (data != null) noteTopic(topic);
     if (topic.endsWith(".z")) {
       if (typeof data !== "string") return;
-      const decoded = JSON.parse(await inflate(data));
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(await inflate(data));
+      } catch {
+        return; // one unreadable frame isn't worth dropping the connection over
+      }
       if (topic === "Position.z") posQ.push(...((decoded as { Position?: PositionFrame[] }).Position ?? []));
       else if (topic === "CarData.z") carQ.push(...((decoded as { Entries?: CarDataFrame[] }).Entries ?? []));
       return;
@@ -168,6 +175,7 @@ export function startF1Live(delayMs: () => number): () => void {
     pending.push({ at, topic, data, replace });
   };
 
+  /** One connection; resolves when F1 ends a stream that had been working */
   const session = async () => {
     await watchF1Account();
     let token = f1Token();
@@ -184,6 +192,9 @@ export function startF1Live(delayMs: () => number): () => void {
       neg = await fetch(`${HUB}/negotiate?negotiateVersion=1`, { method: "POST", ...opts({ "Content-Type": "application/json" }) });
     }
     if (!neg.ok) throw new Error(`F1 live timing answered ${neg.status}`);
+    // A first idea of F1's clock (to the second) before any update arrives, so the
+    // subscribe snapshot is timed right on a machine whose clock is off
+    if (!skews.length) noteSkew(Date.parse(neg.headers.get("date") ?? ""));
     withToken = !!token;
     usePitwall.setState({ feed: { topics: [...seen], withToken } });
     const { connectionToken } = (await neg.json()) as { connectionToken: string };
@@ -201,7 +212,11 @@ export function startF1Live(delayMs: () => number): () => void {
       let handshaken = false;
       for (;;) {
         const { done, value } = await reader.read();
-        if (done) throw new Error("F1 closed the live timing stream");
+        if (done) {
+          // F1 drops idle streams (e.g. between sessions): just reconnect
+          if (subscribed) return;
+          throw new Error("F1 closed the live timing stream");
+        }
         buf += value.replace(/\r\n/g, "\n");
         let end: number;
         while ((end = buf.indexOf("\n\n")) >= 0) {
@@ -232,6 +247,7 @@ export function startF1Live(delayMs: () => number): () => void {
 
   (async () => {
     while (!abort.signal.aborted) {
+      subscribed = false;
       try {
         await session();
       } catch (err) {

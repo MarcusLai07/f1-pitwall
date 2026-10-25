@@ -38,7 +38,17 @@ const KEEP = 600;
 let worker: Worker | null = null;
 let workerModel: ModelKey | null = null;
 const fileProgress = new Map<string, { loaded: number; total: number }>();
-const waiting = new Map<string, (text: string | null) => void>();
+// Pending transcriptions; `undefined` means the worker went away before answering
+const waiting = new Map<string, (text: string | null | undefined) => void>();
+
+/** Ends the worker; whatever it was transcribing goes back on the queue */
+function stopWorker() {
+  worker?.terminate();
+  worker = null;
+  workerModel = null;
+  for (const resolve of waiting.values()) resolve(undefined);
+  waiting.clear();
+}
 
 export const useRadio = create<RadioStore>((set, get) => ({
   model: null,
@@ -54,9 +64,7 @@ export const useRadio = create<RadioStore>((set, get) => ({
     set({ model });
     saveValue(MODEL_KEY, model);
     if (!model) {
-      worker?.terminate();
-      worker = null;
-      workerModel = null;
+      stopWorker();
       set({ status: "off", queue: [], working: null });
       return;
     }
@@ -80,7 +88,7 @@ Promise.all([loadValue<ModelKey | null>(MODEL_KEY), loadValue<Record<string, str
 
 function startWorker(model: ModelKey) {
   if (worker && workerModel === model) return;
-  worker?.terminate();
+  stopWorker();
   fileProgress.clear();
   worker = new Worker(new URL("./transcribe.worker.ts", import.meta.url), { type: "module" });
   workerModel = model;
@@ -146,16 +154,22 @@ async function pump() {
   if (s.working || s.status !== "ready" || !s.queue.length || !worker) return;
   const [url, ...rest] = s.queue;
   useRadio.setState({ working: url, queue: rest });
-  let text: string | null = null;
+  let text: string | null | undefined = null;
   try {
     const audio = await decode(url);
+    if (!worker) throw new Error("no worker");
     const id = `${url}#${Date.now()}`;
-    text = await new Promise<string | null>((resolve) => {
+    text = await new Promise<string | null | undefined>((resolve) => {
       waiting.set(id, resolve);
       worker!.postMessage({ type: "transcribe", id, audio } satisfies WorkerRequest, [audio.buffer]);
     });
   } catch {
-    text = null;
+    text = worker ? null : undefined;
+  }
+  if (text === undefined) {
+    // The model changed (or transcripts were switched off) mid-clip: try it again later
+    useRadio.setState((st) => ({ working: null, queue: st.status === "off" ? st.queue : [url, ...st.queue] }));
+    return;
   }
   useRadio.setState((st) =>
     text === null

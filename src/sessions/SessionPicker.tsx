@@ -7,7 +7,8 @@ import { ArchiveAuthError, archivePath } from "../data/archive";
 import { usePitwall } from "../data/store";
 import { cn } from "../lib/format";
 import { useTicker } from "../ui/hooks";
-import { loadSeason, sessionState, type Meeting, type ScheduleSource, type Session } from "./catalog";
+import { sessionState, type Meeting, type Session } from "./catalog";
+import { ensureSeason, isSeason, useSchedule } from "./schedule";
 import {
   beginSignIn,
   checkF1Account,
@@ -40,8 +41,10 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
   useTicker(1 / 30); // keep "in 12 min" current
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
-  const [season, setSeason] = useState<{ meetings: Meeting[]; source: ScheduleSource } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // The season comes from the schedule store the header and calendar share
+  const entry = useSchedule((s) => s.seasons[year]);
+  const season = isSeason(entry) ? entry : null;
+  const error = entry && typeof entry === "object" && "error" in entry ? entry.error : null;
   const [busy, setBusy] = useState<number | null>(null);
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
   const showing = usePitwall((s) => s.live.SessionInfo?.Key);
@@ -52,17 +55,7 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
 
   // Signing in can unlock the archive's schedule when OpenF1 is closed, so retry then
   const signedIn = account.state === "signed-in";
-  useEffect(() => {
-    let alive = true;
-    setSeason(null);
-    setError(null);
-    loadSeason(year)
-      .then((s) => alive && setSeason(s))
-      .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)));
-    return () => {
-      alive = false;
-    };
-  }, [year, signedIn]);
+  useEffect(() => ensureSeason(year), [year, signedIn]);
 
   // The meeting happening now, or the next one
   const focusKey = useMemo(

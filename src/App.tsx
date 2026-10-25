@@ -41,6 +41,8 @@ export function App() {
   const stopRef = useRef<(() => void) | null>(null);
   // Bumped whenever the source changes, so a recording that finishes loading late is dropped
   const loadIdRef = useRef(0);
+  // Cancels the archive download a newer source supersedes
+  const loadAbortRef = useRef<AbortController | null>(null);
 
   // Each view keeps one layout per session type (practice / qualifying / race)
   useEffect(() => {
@@ -52,6 +54,7 @@ export function App() {
 
   const goLive = useCallback(() => {
     loadIdRef.current++;
+    loadAbortRef.current?.abort();
     stopRef.current?.();
     setControls(null);
     liveRef.current = { signedIn: useF1Account.getState().state === "signed-in" };
@@ -65,8 +68,10 @@ export function App() {
   }, [signedIn, goLive]);
 
   const openReplay = useCallback(
-    async (name: string, via: Via, load: (onProgress: (fraction: number) => void) => Promise<Recording>) => {
+    async (name: string, via: Via, load: (onProgress: (fraction: number) => void, signal: AbortSignal) => Promise<Recording>) => {
       const loadId = ++loadIdRef.current;
+      loadAbortRef.current?.abort();
+      const abort = (loadAbortRef.current = new AbortController());
       stopRef.current?.();
       stopRef.current = null;
       liveRef.current = null;
@@ -83,7 +88,7 @@ export function App() {
       try {
         const rec = await load((p) => {
           if (loadId === loadIdRef.current) usePitwall.setState((s) => ({ replay: s.replay && { ...s.replay, loadProgress: p } }));
-        });
+        }, abort.signal);
         if (loadId !== loadIdRef.current) return;
         const c = startReplay(rec);
         stopRef.current = c.stop;
@@ -104,7 +109,7 @@ export function App() {
 
   /** A past session from F1's timing archive, by its folder path */
   const openArchive = useCallback(
-    (path: string, name: string, base = ARCHIVE_BASE) => openReplay(name, "archive", (p) => loadArchive(path, p, base)),
+    (path: string, name: string, base = ARCHIVE_BASE) => openReplay(name, "archive", (p, signal) => loadArchive(path, p, base, signal)),
     [openReplay]
   );
 
@@ -123,6 +128,7 @@ export function App() {
       alive = false;
       liveRef.current = null;
       loadIdRef.current++;
+      loadAbortRef.current?.abort();
       stopRef.current?.();
       stopRef.current = null;
     };

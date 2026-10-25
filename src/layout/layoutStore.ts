@@ -28,6 +28,8 @@ const withLimits = (items: readonly LayoutItem[]): LayoutItem[] =>
     .map((it) => ({ ...it, minW: WIDGETS[it.i as WidgetId].minW, minH: WIDGETS[it.i as WidgetId].minH }));
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+// Loads can overlap (view and session type change together); only the latest applies
+let loadSeq = 0;
 const persist = (view: View, kind: SessionKind, items: LayoutItem[]) => {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
@@ -43,11 +45,13 @@ export const useLayout = create<LayoutStore>((set, get) => ({
   packing: "pack",
   ready: false,
   load: async (view, kind) => {
+    const seq = ++loadSeq;
     const [saved, locked, packing] = await Promise.all([
       loadValue<LayoutItem[]>(layoutKey(view, kind)),
       loadValue<boolean>(`locked:${view}`),
       loadValue<"pack" | "free">(`packing:${view}`),
     ]);
+    if (seq !== loadSeq) return;
     set({
       view,
       kind,

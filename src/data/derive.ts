@@ -49,7 +49,21 @@ export interface DriverRow {
   knockedOut: boolean;
 }
 
+// The tower, telemetry, map, lap times and race trace all ask for the same snapshot's
+// rows; unchanged topics keep their references, so the last result can be reused
+let lastInputs: unknown[] = [];
+let lastRows: DriverRow[] = [];
+
+/** One row per driver, in running order. Cached for the latest set of topics. */
 export function buildRows(live: LiveState): DriverRow[] {
+  const inputs = [live.TimingData, live.DriverList, live.TimingAppData, live.TimingStats, live.SessionInfo];
+  if (inputs.every((v, i) => v === lastInputs[i])) return lastRows;
+  lastInputs = inputs;
+  lastRows = computeRows(live);
+  return lastRows;
+}
+
+function computeRows(live: LiveState): DriverRow[] {
   const lines = live.TimingData?.Lines ?? {};
   const drivers = live.DriverList ?? {};
   const app = live.TimingAppData?.Lines ?? {};

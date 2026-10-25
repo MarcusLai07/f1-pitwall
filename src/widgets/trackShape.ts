@@ -125,93 +125,105 @@ export function useTrackShape(): { shape: TrackShape | null; status: ShapeStatus
       return;
     }
     const geometry = stored?.geometry ?? null;
-    // A replay: settle it from the whole session before anything plays
-    const hist = positionHistory();
-    const decided = hist ? decideFromHistory(hist, geometry, key) : null;
-    if (decided === "stored") {
-      setStatus("ready");
-      return;
-    }
-    if (decided) {
-      setFix(decided);
-      saveValue(fixKey(key), decided);
-      return;
-    }
-    let mode: "checking" | "building" = geometry ? "checking" : "building";
-    setStatus(mode);
-    const samples: Pt[] = [];
-    // Parked cars (garage, pit box) would repeat the same off-track point every second
-    const lastSample = new Map<string, Pt>();
-    let tick = 0;
+    let id: ReturnType<typeof setInterval> | undefined;
     const save = (f: Fix) => {
       setFix(f);
       saveValue(fixKey(key), f);
     };
-
-    const id = setInterval(() => {
-      tick++;
-      if (mode === "checking" && geometry) {
-        const { live } = usePitwall.getState();
-        const at = trackNow();
-        for (const num of Object.keys(live.DriverList ?? {})) {
-          const p = positionAt(num, at);
-          if (!p || p.status !== "OnTrack" || (!p.x && !p.y)) continue;
-          const pt: Pt = [p.x / 10, p.y / 10];
-          const prev = lastSample.get(num);
-          if (prev && Math.hypot(pt[0] - prev[0], pt[1] - prev[1]) < MOVED_M) continue;
-          lastSample.set(num, pt);
-          samples.push(pt);
-        }
-        const meters = geometry.transform.scale * (geometry.transform.scaleAdjust || 1);
-        const track: Pt[] = geometry.pts.map((q) => [q[0], q[1]]);
-        const baked = bakedSimilarity(geometry.transform);
-        if (samples.length >= CHECK_AFTER && samples.length < FIT_AFTER) {
-          if (alignmentError(baked, samples.slice(-400), track) * meters < GOOD_M) {
-            setStatus("ready");
-            clearInterval(id);
-            return;
-          }
-        }
-        if (samples.length >= FIT_AFTER) {
-          const fit = fitTrack(samples.slice(-1200), track, baked);
-          if (fit.error * meters < GOOD_M) {
-            save({ kind: "aligned", sim: fit.sim });
-            clearInterval(id);
-            return;
-          }
-          // No rotation or shift fits: a different layout. Build it from a live lap.
-          mode = "building";
-          setStatus("building");
-        }
-      }
-      if (mode === "building" && tick % 3 === 0) {
-        // Longest traces first: they're the likeliest to hold a clean lap
-        const candidates = [...trackTraces().entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 6);
-        for (const [, trace] of candidates) {
-          const g = buildTrackGeometry(`live:${key}`, trace);
-          if (g) {
-            save({ kind: "live", geometry: g });
-            clearInterval(id);
-            return;
-          }
-        }
-      }
-    }, 1000);
+    // A replay settles it from the whole session, just after the map first paints (it's
+    // a few hundred milliseconds of work); live mode learns as cars drive
+    const hist = positionHistory();
+    if (hist) {
+      setStatus("checking");
+      const t = setTimeout(() => {
+        const decided = decideFromHistory(hist, geometry, key);
+        if (decided === "stored") setStatus("ready");
+        else if (decided) save(decided);
+        else watch();
+      }, 30);
+      return () => {
+        clearTimeout(t);
+        clearInterval(id);
+      };
+    }
+    watch();
     return () => clearInterval(id);
+
+    function watch() {
+      let mode: "checking" | "building" = geometry ? "checking" : "building";
+      setStatus(mode);
+      const samples: Pt[] = [];
+      // Parked cars (garage, pit box) would repeat the same off-track point every second
+      const lastSample = new Map<string, Pt>();
+      let tick = 0;
+
+      id = setInterval(() => {
+        tick++;
+        if (mode === "checking" && geometry) {
+          const { live } = usePitwall.getState();
+          const at = trackNow();
+          for (const num of Object.keys(live.DriverList ?? {})) {
+            const p = positionAt(num, at);
+            if (!p || p.status !== "OnTrack" || (!p.x && !p.y)) continue;
+            const pt: Pt = [p.x / 10, p.y / 10];
+            const prev = lastSample.get(num);
+            if (prev && Math.hypot(pt[0] - prev[0], pt[1] - prev[1]) < MOVED_M) continue;
+            lastSample.set(num, pt);
+            samples.push(pt);
+          }
+          const meters = geometry.transform.scale * (geometry.transform.scaleAdjust || 1);
+          const track: Pt[] = geometry.pts.map((q) => [q[0], q[1]]);
+          const baked = bakedSimilarity(geometry.transform);
+          if (samples.length >= CHECK_AFTER && samples.length < FIT_AFTER) {
+            if (alignmentError(baked, samples.slice(-400), track) * meters < GOOD_M) {
+              setStatus("ready");
+              clearInterval(id);
+              return;
+            }
+          }
+          if (samples.length >= FIT_AFTER) {
+            const fit = fitTrack(samples.slice(-1200), track, baked);
+            if (fit.error * meters < GOOD_M) {
+              save({ kind: "aligned", sim: fit.sim });
+              clearInterval(id);
+              return;
+            }
+            // No rotation or shift fits: a different layout. Build it from a live lap.
+            mode = "building";
+            setStatus("building");
+          }
+        }
+        if (mode === "building" && tick % 3 === 0) {
+          // Longest traces first: they're the likeliest to hold a clean lap
+          const candidates = [...trackTraces().entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 6);
+          for (const [, trace] of candidates) {
+            const g = buildTrackGeometry(`live:${key}`, trace);
+            if (g) {
+              save({ kind: "live", geometry: g });
+              clearInterval(id);
+              return;
+            }
+          }
+        }
+      }, 1000);
+    }
   }, [key, stored, fix]);
 
+  // Keyed on plain strings, not the SessionInfo object: a replay seek rebuilds that object,
+  // and a new circuit object would make the map tear down and rebuild its whole scene
+  const circuitName = info?.Meeting?.Circuit?.ShortName ?? info?.Meeting?.Location ?? "Track";
+  const location = info?.Meeting?.Location ?? "";
   const shape = useMemo<TrackShape | null>(() => {
     if (!key || stored === undefined || fix === undefined) return null;
     if (fix?.kind === "live") {
-      const name = info?.Meeting?.Circuit?.ShortName ?? info?.Meeting?.Location ?? "Track";
       const circuit: CircuitData = stored?.circuit
         ? { ...stored.circuit, corners: [] } // stored corner positions belong to the stored shape
-        : { id: key, name, shortName: name, location: info?.Meeting?.Location ?? "", length: fix.geometry.len, corners: [] };
+        : { id: key, name: circuitName, shortName: circuitName, location, length: fix.geometry.len, corners: [] };
       return { key, circuit, geometry: fix.geometry, sim: null, source: "live" };
     }
     if (!stored) return null;
     return { key, circuit: stored.circuit, geometry: stored.geometry, sim: fix?.kind === "aligned" ? fix.sim : null, source: fix ? "aligned" : "stored" };
-  }, [key, stored, fix, info]);
+  }, [key, stored, fix, circuitName, location]);
 
   return { shape, status };
 }

@@ -15,9 +15,9 @@ export const ARCHIVE_BASE = import.meta.env.DEV ? "/f1static/" : "https://liveti
 /** The archive wants an F1 TV sign-in (401) */
 export class ArchiveAuthError extends Error {}
 
-export async function archiveFetch(url: string): Promise<Response> {
+export async function archiveFetch(url: string, signal?: AbortSignal): Promise<Response> {
   const token = f1Token();
-  const res = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+  const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal });
   if (res.status === 401) {
     if (token) reportRefused(token);
     throw new ArchiveAuthError(token ? "F1 TV refused the sign-in" : "Sign in to F1 TV first");
@@ -25,8 +25,8 @@ export async function archiveFetch(url: string): Promise<Response> {
   return res;
 }
 
-async function archiveJson<T>(url: string): Promise<T | null> {
-  const res = await archiveFetch(url);
+async function archiveJson<T>(url: string, signal?: AbortSignal): Promise<T | null> {
+  const res = await archiveFetch(url, signal);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`F1's archive answered ${res.status}`);
   return JSON.parse((await res.text()).replace(/^﻿/, "")) as T;
@@ -225,8 +225,8 @@ export async function inflate(b64: string): Promise<string> {
   return new Response(stream).text();
 }
 
-async function download(url: string, onBytes: (read: number, total: number) => void): Promise<string | null> {
-  const res = await archiveFetch(url);
+async function download(url: string, onBytes: (read: number, total: number) => void, signal?: AbortSignal): Promise<string | null> {
+  const res = await archiveFetch(url, signal);
   if (res.status === 404) return null;
   if (!res.ok || !res.body) throw new Error(`F1's archive answered ${res.status}`);
   const total = Number(res.headers.get("content-length")) || 0;
@@ -243,10 +243,11 @@ async function download(url: string, onBytes: (read: number, total: number) => v
   return text;
 }
 
-/** Downloads and decodes one archived session into a playable recording */
-export async function loadArchive(path: string, onProgress: (fraction: number) => void, base = ARCHIVE_BASE): Promise<Recording> {
+/** Downloads and decodes one archived session; `signal` cancels it (a newer load superseded it) */
+export async function loadArchive(path: string, onProgress: (fraction: number) => void, base = ARCHIVE_BASE, signal?: AbortSignal): Promise<Recording> {
   const folder = base + path.replace(/^\/+/, "").replace(/\/?$/, "/");
-  const index = await archiveJson<{ Feeds?: Record<string, unknown> }>(`${folder}Index.json`).catch((err) => {
+  const index = await archiveJson<{ Feeds?: Record<string, unknown> }>(`${folder}Index.json`, signal).catch((err) => {
+    if (signal?.aborted) throw err;
     if (err instanceof ArchiveAuthError) throw err;
     return null;
   });
@@ -260,10 +261,14 @@ export async function loadArchive(path: string, onProgress: (fraction: number) =
   const texts = new Map<string, string>();
   await Promise.all(
     topics.map(async (topic) => {
-      const text = await download(`${folder}${topic}.jsonStream`, (read, total) => {
-        if (total) share.set(topic, Math.min(0.99, read / total));
-        report();
-      });
+      const text = await download(
+        `${folder}${topic}.jsonStream`,
+        (read, total) => {
+          if (total) share.set(topic, Math.min(0.99, read / total));
+          report();
+        },
+        signal
+      );
       share.set(topic, 1);
       report();
       if (text) texts.set(topic, text);
@@ -300,6 +305,7 @@ export async function loadArchive(path: string, onProgress: (fraction: number) =
     const lines = [...streamLines(texts.get(topic)!)];
     texts.delete(topic);
     for (let i = 0; i < lines.length; i += 256) {
+      signal?.throwIfAborted();
       const batch = lines.slice(i, i + 256);
       const decoded = await Promise.all(batch.map(([, body]) => inflate(JSON.parse(body) as string).catch(() => null)));
       for (const [k, json] of decoded.entries()) {

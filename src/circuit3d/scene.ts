@@ -166,6 +166,8 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
       renderer.dispose();
+      // dispose() keeps the GL context; browsers allow ~16, so hand it back now
+      renderer.forceContextLoss();
       renderer.domElement.remove();
     },
   };

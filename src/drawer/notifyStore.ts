@@ -75,7 +75,11 @@ export function useRaceControlNotifications() {
     };
     handle(usePitwall.getState().live.RaceControlMessages);
     return usePitwall.subscribe((s, p) => {
-      if (s.live.RaceControlMessages !== p.live.RaceControlMessages) handle(s.live.RaceControlMessages);
+      if (s.resync !== p.resync) {
+        // A replay seek or a source switch: what's listed now is history, not news
+        seen.current = null;
+      }
+      if (s.live.RaceControlMessages !== p.live.RaceControlMessages || s.resync !== p.resync) handle(s.live.RaceControlMessages);
     });
   }, []);
 }

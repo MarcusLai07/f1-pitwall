@@ -26,7 +26,7 @@ interface CarEntry {
   tag: HTMLElement;
   anchor: THREE.Vector3;
   elevHint: { index: number };
-  key: string; // last applied look, to skip unchanged style writes
+  look: CarRenderInput | null; // last applied look, to skip unchanged style writes
 }
 
 export interface CarLayer {
@@ -63,13 +63,24 @@ export function createCarLayer(handle: SceneHandle, projector: LabelProjector, c
     container.appendChild(dot);
     const anchor = new THREE.Vector3(input.x, 0, input.z);
     projector.add(dot, anchor);
-    return { dot, number, tag, anchor, elevHint: { index: -1 }, key: "" };
+    return { dot, number, tag, anchor, elevHint: { index: -1 }, look: null };
   };
 
   const style = (car: CarEntry, input: CarRenderInput) => {
-    const key = [input.num, input.code, input.color, input.position, input.inPit, input.selected, input.overtake, input.named].join("|");
-    if (key === car.key) return;
-    car.key = key;
+    const l = car.look;
+    if (
+      l &&
+      l.num === input.num &&
+      l.code === input.code &&
+      l.color === input.color &&
+      l.position === input.position &&
+      l.inPit === input.inPit &&
+      l.selected === input.selected &&
+      l.overtake === input.overtake &&
+      l.named === input.named
+    )
+      return;
+    car.look = { ...input };
     const size = input.selected ? DOT_SELECTED_PX : input.inPit ? DOT_PIT_PX : DOT_PX;
     const s = car.dot.style;
     s.width = s.height = `${size}px`;

@@ -57,6 +57,13 @@ export function nextSession(meetings: Meeting[], now = Date.now()): NextUp | nul
   return null;
 }
 
+// One refresh for the whole app, however many components ask for the next session
+let refreshing: ReturnType<typeof setInterval> | undefined;
+function keepFresh(year: number) {
+  ensureSeason(year);
+  refreshing ??= setInterval(() => ensureSeason(new Date().getFullYear()), REFRESH_MS);
+}
+
 /** The next session on the calendar, this season or (at its end) the next one */
 export function useNextSession(): NextUp | null {
   useTicker(1 / 15);
@@ -66,11 +73,7 @@ export function useNextSession(): NextUp | null {
   const thisYear = seasons[year];
   const next = isSeason(thisYear) ? nextSession(thisYear.meetings, now) : null;
   const overflow = isSeason(thisYear) && !next;
-  useEffect(() => {
-    ensureSeason(year);
-    const id = setInterval(() => ensureSeason(year), REFRESH_MS);
-    return () => clearInterval(id);
-  }, [year]);
+  useEffect(() => keepFresh(year), [year]);
   useEffect(() => {
     if (overflow) ensureSeason(year + 1);
   }, [overflow, year]);
