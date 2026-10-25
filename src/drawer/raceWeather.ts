@@ -196,3 +196,47 @@ export function useRaceStrategy(location: string | undefined): { strategy: Strat
   }, [location]);
   return { strategy, loading };
 }
+
+// Pirelli compound nomination per race. There's no official feed, so it's a small file
+// in the repo (data/nominations.json) that Pit Wall fetches live from GitHub — editing
+// it on main updates every copy without a release. Keep it current with
+// scripts/update-nominations.mjs.
+const NOMINATIONS_URL = "https://raw.githubusercontent.com/MarcusLai07/f1-pitwall/main/data/nominations.json";
+
+export interface Nomination {
+  hard: string;
+  medium: string;
+  soft: string;
+}
+
+let nominationsDoc: Promise<Record<string, Record<string, Nomination>>> | null = null;
+function loadNominations() {
+  nominationsDoc ??= fetch(NOMINATIONS_URL, { cache: "no-cache" })
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => {
+      nominationsDoc = null;
+      return {};
+    });
+  return nominationsDoc;
+}
+
+export function useNomination(season: number | undefined, location: string | undefined): Nomination | null {
+  const [nom, setNom] = useState<Nomination | null>(null);
+  useEffect(() => {
+    setNom(null);
+    if (!season || !location) return;
+    let alive = true;
+    loadNominations().then((doc) => {
+      if (!alive) return;
+      const byCity = doc[String(season)];
+      if (!byCity) return;
+      const want = strip(location);
+      const hit = Object.entries(byCity).find(([city]) => strip(city) === want || want.includes(strip(city)));
+      setNom(hit ? hit[1] : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [season, location]);
+  return nom;
+}

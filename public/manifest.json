@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pit Wall",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "One rearrangeable window for F1 timing, map and telemetry, live and past sessions, straight from F1 with your F1 TV sign-in.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -19,7 +19,8 @@
     "https://*.formula1.com/*",
     "https://api.openf1.org/*",
     "https://api.jolpi.ca/*",
-    "https://api.open-meteo.com/*"
+    "https://api.open-meteo.com/*",
+    "https://raw.githubusercontent.com/*"
   ],
   "background": {
     "service_worker": "background.js",

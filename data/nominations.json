@@ -1,0 +1,8 @@
+{
+  "_comment": "Pirelli dry-tyre nomination per race, by season then race city (lowercased). Pit Wall fetches this live from GitHub, so edits to main show up without a release. Update with: node scripts/update-nominations.mjs --season 2026 --city \"<city>\" --compounds C2,C3,C4",
+  "2026": {
+    "austin": { "hard": "C2", "medium": "C3", "soft": "C4", "source": "formula1.com / motorbox 2026 US GP" },
+    "mexico city": { "hard": "C3", "medium": "C4", "soft": "C5", "source": "motorbox 2026" },
+    "são paulo": { "hard": "C3", "medium": "C4", "soft": "C5", "source": "motorbox 2026" }
+  }
+}

@@ -94,7 +94,7 @@ Straight from F1, in your browser. Pit Wall has no server.
 ## Use
 
 - **Sessions:** every session of a season, past, live and upcoming, in your time zone. **Replay** plays a past one from F1's archive and **Follow** switches to live. Your F1 TV sign-in sits top right.
-- **Race brief:** the amber tab at the right of the drawer bar opens a pre-race brief for the next race — the weather forecast (Open-Meteo), what's at stake in the title race, the likely strategy (typical stop count from past races at the circuit), the tyre sets each driver has used in the running session, and a circuit guide (length, laps, DRS zones, lap record).
+- **Race brief:** the amber tab at the right of the drawer bar opens a pre-race brief for the next race — the weather forecast (Open-Meteo), what's at stake in the title race, the Pirelli compound nomination, the likely strategy (typical stop count from past races at the circuit), the tyre sets each driver has used in the running session, and a circuit guide (length, laps, DRS zones, lap record).
 - **Championship:** the trophy button opens the drivers' and constructors' standings with the title race (how many can still win, points left, and when it's clinched), plus the team and driver roster. Standings come from Jolpica (the Ergast continuation); it works with no live session.
 - **Calendar:** the season at a glance: a month grid in your time zone with the race weekends marked (sprint weekends in purple), and the picked round's sessions with their times and a countdown.
 - **Source chip** (top right, e.g. *Live · F1 TV · 3 s behind* or *Replay · F1 TV archive*): what the board shows and where it comes from. Click it to set the live delay.
@@ -127,6 +127,8 @@ The dev page opens on [localhost:5288/window.html](http://localhost:5288/window.
 
 - `?replay=/recordings/<file>` loads an older MultiViewer recording (gzip NDJSON, one state per line) from `recordings/`.
 - `?archive=<session path>&archiveBase=/recordings/archive/` plays a saved copy of an archive session, e.g. `recordings/archive/2024/2024-10-27_Mexico_City_Grand_Prix/2024-10-27_Race/` holding its `.jsonStream` files.
+
+**Tyre nominations:** `data/nominations.json` holds Pirelli's compounds per race (by season then city); Pit Wall fetches it live from GitHub, so editing it on `main` updates every copy with no release. Update it with `node scripts/update-nominations.mjs --season 2026 --city "Mexico City" --compounds C3,C4,C5`.
 
 **Releasing:** bump the version in `package.json` and `public/manifest.json`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow builds the extension, stamps the tag's version into its manifest and attaches `pit-wall.zip` to a GitHub release, which `install.sh` downloads.
 

@@ -8,7 +8,7 @@ import { useChampionship } from "../sessions/championship";
 import { ensureSeason, useNextSession } from "../sessions/schedule";
 import type { Meeting, Session } from "../sessions/catalog";
 import { usePitwall } from "../data/store";
-import { useRaceWeather, useRaceStrategy } from "./raceWeather";
+import { useNomination, useRaceWeather, useRaceStrategy } from "./raceWeather";
 
 const day = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -27,6 +27,7 @@ export function RaceBriefPanel() {
 
   if (!target) return <Empty>Waiting for the schedule…</Empty>;
   const { meeting, race } = target;
+  const season = new Date(race?.start ?? meeting.start ?? Date.now()).getFullYear();
   return (
     <div className="h-full overflow-y-auto p-3">
       <div className="mb-2 flex items-center gap-2">
@@ -38,6 +39,7 @@ export function RaceBriefPanel() {
       <div className="grid gap-2 md:grid-cols-2">
         <WeatherCard location={meeting.location || meeting.circuit} startMs={race?.start} />
         <StakeCard meeting={meeting} />
+        <NominationCard season={season} location={meeting.location || meeting.circuit} />
         <StrategyCard location={meeting.location || meeting.circuit} />
         <TyresCard />
         <CircuitCard meeting={meeting} />
@@ -136,6 +138,31 @@ function StakeCard({ meeting }: { meeting: Meeting }) {
 const COMPOUND = ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"];
 const COMPOUND_SHORT: Record<string, string> = { SOFT: "S", MEDIUM: "M", HARD: "H", INTERMEDIATE: "I", WET: "W" };
 const COMPOUND_COLOR: Record<string, string> = { SOFT: "#ef4444", MEDIUM: "#eab308", HARD: "#e5e7eb", INTERMEDIATE: "#22c55e", WET: "#3b82f6" };
+
+// Pirelli's hardest→softest C-range palette (independent of per-weekend white/yellow/red)
+const C_COLOR: Record<string, string> = { C1: "#60a5fa", C2: "#e5e7eb", C3: "#eab308", C4: "#f97316", C5: "#ef4444", C6: "#ec4899" };
+
+function NominationCard({ season, location }: { season: number; location: string }) {
+  const nom = useNomination(season, location);
+  return (
+    <Section title="Pirelli compounds">
+      {!nom ? (
+        <p className="text-[12px] text-zinc-500">Not announced yet for this race.</p>
+      ) : (
+        <div className="flex items-center gap-4">
+          {([["Hard", nom.hard], ["Medium", nom.medium], ["Soft", nom.soft]] as const).map(([role, c]) => (
+            <div key={role} className="flex items-center gap-1.5">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 text-[10px] font-black" style={{ borderColor: C_COLOR[c] ?? "#888", color: C_COLOR[c] ?? "#888" }}>
+                {c}
+              </span>
+              <span className="text-[11px] text-zinc-400">{role}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
 
 function StrategyCard({ location }: { location: string }) {
   const { strategy, loading } = useRaceStrategy(location);
