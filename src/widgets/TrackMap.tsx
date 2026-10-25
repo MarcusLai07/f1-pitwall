@@ -142,6 +142,15 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
     let pitSet = new Set<string>();
     let order = new Map<string, { position: number; inRange: boolean }>();
     let rowsRef: unknown; // the TimingData the order was built from
+    // The pit lane, learned from cars driving through it: each in-pit car's transit is a
+    // time-ordered run; the longest clean one becomes the lane (there's no stored geometry).
+    const pitRun = new Map<string, [number, number][]>();
+    let pitLaneSpan = 0; // span (geometry units) of the best lane drawn so far
+    const span = (pts: [number, number][]) => {
+      let d = 0;
+      for (let i = 1; i < pts.length; i++) d += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      return d;
+    };
 
     const unsubFrame = handle.onFrame(() => {
       if (!mapper || hideCarsRef.current) {
@@ -167,6 +176,22 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
         if (!p || (p.x === 0 && p.y === 0)) continue;
         const [xn, yn] = mapper(p.x, p.y);
         const o = order.get(num);
+        const inPit = pitSet.has(num) || p.status === "OffTrack";
+        // Learn the pit lane only from true in-pit cars (TimingData), not off-track runoff
+        if (pitSet.has(num)) {
+          let run = pitRun.get(num);
+          if (!run) pitRun.set(num, (run = []));
+          const last = run[run.length - 1];
+          if (!last || Math.hypot(xn - last[0], yn - last[1]) > 0.004) run.push([xn, yn]);
+        } else if (pitRun.has(num)) {
+          const run = pitRun.get(num)!;
+          pitRun.delete(num);
+          // A full transit (not just a parked blip) that's longer than the current lane
+          if (run.length >= 8 && span(run) > Math.max(0.15, pitLaneSpan)) {
+            pitLaneSpan = span(run);
+            handle.setPitLane(smoothPath(run));
+          }
+        }
         inputs.push({
           num,
           code: d.Tla,
@@ -174,7 +199,7 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
           x: xn,
           z: -yn,
           position: o?.position ?? 99,
-          inPit: pitSet.has(num) || p.status === "OffTrack",
+          inPit,
           selected: selected.includes(num),
           overtake: overtakeRef.current && !!o?.inRange,
           named: namesRef.current,
@@ -321,6 +346,17 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
       {children}
     </div>
   );
+}
+
+/** Light 3-point smoothing of an ordered open path */
+function smoothPath(pts: [number, number][]): [number, number][] {
+  if (pts.length < 3) return pts;
+  return pts.map((p, i) => {
+    if (i === 0 || i === pts.length - 1) return p;
+    const a = pts[i - 1];
+    const b = pts[i + 1];
+    return [(a[0] + p[0] + b[0]) / 3, (a[1] + p[1] + b[1]) / 3] as [number, number];
+  });
 }
 
 // F1 positions are decimeters (unit 0.1); one mapper per circuit

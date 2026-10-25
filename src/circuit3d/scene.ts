@@ -8,8 +8,9 @@ import "animejs/adapters/three";
 if (typeof window !== "undefined") {
   (window as unknown as Record<string, unknown>).__animeEngine = engine;
 }
-import type { Line2 } from "three/examples/jsm/lines/Line2.js";
-import type { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { Line2 } from "three/examples/jsm/lines/Line2.js";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { CircuitGeometry } from "../circuits/geometry-schema";
 import { DRS_COLOR, FALLBACK_METERS_PER_UNIT, TRACK_WIDTH_M } from "./constants";
 import {
@@ -40,6 +41,8 @@ export interface SceneHandle {
   curve: THREE.CatmullRomCurve3;
   /** Group units per metre, for sizing things in real distances */
   unitsPerMeter: number;
+  /** Draw/replace the pit lane as a dim lane from ordered geometry-space points ([x, y]); [] clears it */
+  setPitLane: (points: [number, number][]) => void;
   wallGeo: THREE.BufferGeometry;
   wallMat: THREE.MeshBasicMaterial;
   marker: THREE.Mesh;
@@ -90,7 +93,9 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
   group.add(road.asphalt, ...road.edges);
   const zones = buildZoneLines(curve, opts.drsBands ?? [], DRS_COLOR);
   zones.lines.forEach((l) => group.add(l));
-  const lineMats: LineMaterial[] = [road.edgeMat, zones.mat];
+  const pitMat = new LineMaterial({ color: 0x9ca3af, linewidth: 2, transparent: true, opacity: 0.6, dashed: true, dashSize: 0.02, gapSize: 0.012 });
+  let pitLine: Line2 | null = null;
+  const lineMats: LineMaterial[] = [road.edgeMat, zones.mat, pitMat];
   for (const m of lineMats) m.resolution.set(width, height);
 
   const wallGeo = buildWallGeometry(curve);
@@ -142,6 +147,21 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
       frameCbs.add(cb);
       return () => frameCbs.delete(cb);
     },
+    setPitLane: (points) => {
+      if (pitLine) {
+        group.remove(pitLine);
+        pitLine.geometry.dispose();
+        pitLine = null;
+      }
+      if (points.length < 2) return;
+      const pos: number[] = [];
+      for (const [x, y] of points) pos.push(x, handle.elevationAt(x, -y) + 0.004, -y);
+      const g = new LineGeometry();
+      g.setPositions(pos);
+      pitLine = new Line2(g, pitMat);
+      pitLine.computeLineDistances();
+      group.add(pitLine);
+    },
     resize: (w, h) => {
       if (w < 1 || h < 1) return;
       renderer.setSize(w, h);
@@ -159,6 +179,7 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
       const lines: Line2[] = [...road.edges, ...zones.lines];
       for (const l of lines) l.geometry.dispose();
       for (const m of lineMats) m.dispose();
+      pitLine?.geometry.dispose();
       wallGeo.dispose();
       wallMat.dispose();
       marker.geometry.dispose();
