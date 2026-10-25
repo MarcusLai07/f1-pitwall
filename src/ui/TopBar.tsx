@@ -8,6 +8,7 @@ import { useTicker } from "./hooks";
 import { HeaderWeather } from "./HeaderWeather";
 import { currentScale, useUiScale } from "./scale";
 import { useF1Account } from "../sessions/f1account";
+import { CalendarIcon, LayoutIcon, RadioIcon, SessionsIcon } from "./icons";
 import { shortSessionName, useNextSession } from "../sessions/schedule";
 import { CalendarPanel } from "../sessions/CalendarPanel";
 import { SessionPicker } from "../sessions/SessionPicker";
@@ -210,7 +211,15 @@ function SourceStatus({ onGoLive, compact }: Pick<Props, "onGoLive"> & { compact
         )}
         <span className="text-zinc-500">▾</span>
       </button>
-      {source === "replay" && <BarButton onClick={onGoLive}>Go live</BarButton>}
+      {source === "replay" && (
+        <IconButton
+          label="Go live"
+          hint="Back to F1's live timing"
+          icon={<RadioIcon className="h-4 w-4" />}
+          onClick={onGoLive}
+          className="border-f1-red/50 text-red-300 hover:border-f1-red hover:text-white"
+        />
+      )}
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
@@ -308,9 +317,13 @@ function SessionsButton({ onGoLive, onOpenArchive }: Pick<Props, "onGoLive" | "o
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <BarButton onClick={() => setOpen((o) => !o)} title="Past, live and upcoming sessions, and your F1 TV sign-in">
-        Sessions
-      </BarButton>
+      <IconButton
+        label="Sessions"
+        hint="Past, live and upcoming sessions · F1 TV sign-in"
+        icon={<SessionsIcon className="h-4 w-4" />}
+        active={open}
+        onClick={() => setOpen((o) => !o)}
+      />
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
@@ -334,9 +347,13 @@ function CalendarButton() {
   const close = () => setState((s) => (s === "open" ? "closing" : s));
   return (
     <div className="relative">
-      <BarButton onClick={() => (state === "closed" ? setState("open") : close())} title="The season calendar">
-        Calendar
-      </BarButton>
+      <IconButton
+        label="Calendar"
+        hint="The season at a glance"
+        icon={<CalendarIcon className="h-4 w-4" />}
+        active={state !== "closed"}
+        onClick={() => (state === "closed" ? setState("open") : close())}
+      />
       {state !== "closed" && (
         <>
           <div className="fixed inset-0 z-40" onClick={close} />
@@ -353,7 +370,13 @@ function LayoutMenu() {
   const hidden = (Object.keys(WIDGETS) as WidgetId[]).filter((id) => !items.some((it) => it.i === id));
   return (
     <div className="relative">
-      <BarButton onClick={() => setOpen((o) => !o)}>Layout</BarButton>
+      <IconButton
+        label="Layout"
+        hint="Widgets, UI size and arrangement"
+        icon={<LayoutIcon className="h-4 w-4" />}
+        active={open}
+        onClick={() => setOpen((o) => !o)}
+      />
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
@@ -434,14 +457,64 @@ function MenuItem({ onClick, children }: { onClick: () => void; children: React.
   );
 }
 
-export function BarButton({ onClick, title, children }: { onClick: () => void; title?: string; children: React.ReactNode }) {
+/**
+ * A square icon button whose tooltip eases in below it after a short hover (or on
+ * keyboard focus), and stays out of the way while its own panel is open.
+ */
+function IconButton({
+  label,
+  hint,
+  icon,
+  onClick,
+  active = false,
+  align = "end",
+  className,
+}: {
+  label: string;
+  hint?: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  /** "end" lines the tooltip up with the button's right edge (the buttons sit at the right of the bar) */
+  align?: "center" | "end";
+  className?: string;
+}) {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="rounded-md border border-zinc-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-600 hover:text-white"
-    >
-      {children}
-    </button>
+    <div className="group/tip relative">
+      <button
+        onClick={onClick}
+        aria-label={label}
+        aria-expanded={active || undefined}
+        className={cn(
+          "flex h-7 w-8 items-center justify-center rounded-md border transition-colors duration-150",
+          active ? "border-zinc-500 bg-zinc-800 text-white" : "border-zinc-800 text-zinc-300 hover:border-zinc-600 hover:text-white",
+          className
+        )}
+      >
+        <span className="transition-transform duration-200 ease-out group-hover/tip:scale-110 group-active/tip:scale-95">{icon}</span>
+      </button>
+      {!active && (
+        <span
+          role="tooltip"
+          className={cn(
+            "pointer-events-none absolute top-full z-50 mt-2 whitespace-nowrap rounded-md border border-zinc-700 bg-zinc-900/95 px-2.5 py-1.5 font-f1 shadow-xl shadow-black/50 backdrop-blur",
+            // Hidden until a short hover (or keyboard focus), then it springs down into place
+            "invisible -translate-y-1 scale-95 opacity-0 transition-[opacity,translate,scale,visibility] duration-200 ease-[cubic-bezier(0.2,0.9,0.3,1.25)]",
+            "group-hover/tip:visible group-hover/tip:translate-y-0 group-hover/tip:scale-100 group-hover/tip:opacity-100 group-hover/tip:delay-300",
+            "group-has-[:focus-visible]/tip:visible group-has-[:focus-visible]/tip:translate-y-0 group-has-[:focus-visible]/tip:scale-100 group-has-[:focus-visible]/tip:opacity-100",
+            align === "end" ? "right-0 origin-top-right" : "left-1/2 -translate-x-1/2 origin-top"
+          )}
+        >
+          <i
+            className={cn(
+              "absolute -top-[5px] h-2 w-2 rotate-45 border-l border-t border-zinc-700 bg-zinc-900",
+              align === "end" ? "right-3" : "left-1/2 -translate-x-1/2"
+            )}
+          />
+          <b className="block text-[11px] font-bold text-zinc-100">{label}</b>
+          {hint && <span className="block text-[10px] text-zinc-400">{hint}</span>}
+        </span>
+      )}
+    </div>
   );
 }

@@ -9,7 +9,7 @@ import { applySim } from "../circuit3d/autoAlign";
 import { useTrackShape, type TrackShape } from "./trackShape";
 import { MapBanners } from "./MapBanners";
 import { positionAt } from "../data/buffers";
-import { buildRows } from "../data/derive";
+import { buildRows, sessionKind } from "../data/derive";
 import { useFreeFeed } from "../data/liveSettings";
 import { trackNow, usePitwall } from "../data/store";
 import { createCircuitScene, type SceneHandle } from "../circuit3d/scene";
@@ -17,8 +17,12 @@ import { createOrbitControls, type OrbitControls } from "../circuit3d/controls";
 import { createLabelProjector } from "../circuit3d/labels";
 import { createCarLayer, type CarRenderInput } from "../circuit3d/cars";
 import { makeGpsMapper } from "../circuit3d/gpsTransform";
-import { DRS_COLOR, SECTOR_COLORS, type ViewPreset } from "../circuit3d/constants";
+import { DRS_COLOR, SECTOR_COLORS, VIEW_PRESETS, type ViewPreset } from "../circuit3d/constants";
+
+// Camera distance when following a car: a few hundred metres of track in view
+const FOLLOW_ZOOM = 0.34;
 import { cn } from "../lib/format";
+import { loadValue, saveValue } from "../lib/storage";
 import { useSize } from "../ui/hooks";
 
 export function TrackMap() {
@@ -68,6 +72,13 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
   const [engine, setEngine] = useState<{ handle: SceneHandle; controls: OrbitControls } | null>(null);
   const [preset, setPreset] = useState<ViewPreset>("top");
   const [follow, setFollow] = useState(false);
+  // Racing numbers in the dots; names beside them only for selected drivers unless this is on
+  const [names, setNames] = useState(false);
+  const namesRef = useRef(names);
+  namesRef.current = names;
+  useEffect(() => {
+    loadValue<boolean>("map:names").then((v) => v !== undefined && setNames(v));
+  }, []);
   const ready = size.width > 0 && size.height > 0;
   const hideCarsRef = useRef(hideCars);
   hideCarsRef.current = hideCars;
@@ -88,6 +99,11 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
     }
     return null;
   });
+  const isRace = usePitwall((s) => sessionKind(s.live.SessionInfo) === "race");
+  // Overtake Mode is open to a car within a second of the one ahead (F1 judges it at a
+  // detection point; this is the same rule on the live interval)
+  const overtakeRef = useRef(false);
+  overtakeRef.current = isRace && overtakeEnabled === true;
 
   const corners = useMemo(() => {
     if (geometry) {
@@ -119,15 +135,13 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
       projector.add(el, new THREE.Vector3(p.x, p.y + 0.07, p.z));
       el.style.opacity = "0.9";
     }
-    handle.tubeMat.opacity = 1;
     handle.wallMat.opacity = 0.12;
-    (handle.marker.material as THREE.MeshBasicMaterial).opacity = 1;
-    for (const m of handle.drsMeshes) (m.material as THREE.MeshBasicMaterial).opacity = 0.85;
 
     const carLayer = createCarLayer(handle, projector, carsRef.current!);
     const mapper = toTrack;
     let pitSet = new Set<string>();
-    let rowsRef = usePitwall.getState().live.TimingData;
+    let order = new Map<string, { position: number; inRange: boolean }>();
+    let rowsRef: unknown; // the TimingData the order was built from
 
     const unsubFrame = handle.onFrame(() => {
       if (!mapper || hideCarsRef.current) {
@@ -137,7 +151,14 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
       const { live, selected } = usePitwall.getState();
       if (live.TimingData !== rowsRef) {
         rowsRef = live.TimingData;
-        pitSet = new Set(buildRows(live).filter((r) => r.status === "PIT" || r.status === "OUT").map((r) => r.num));
+        const rows = buildRows(live);
+        pitSet = new Set(rows.filter((r) => r.status === "PIT" || r.status === "OUT").map((r) => r.num));
+        order = new Map(
+          rows.map((r) => {
+            const gap = Number(r.interval.replace("+", ""));
+            return [r.num, { position: r.position, inRange: r.position > 1 && r.status === "RUN" && Number.isFinite(gap) && gap > 0 && gap < 1 }];
+          })
+        );
       }
       const at = trackNow();
       const inputs: CarRenderInput[] = [];
@@ -145,13 +166,18 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
         const p = positionAt(num, at);
         if (!p || (p.x === 0 && p.y === 0)) continue;
         const [xn, yn] = mapper(p.x, p.y);
+        const o = order.get(num);
         inputs.push({
+          num,
           code: d.Tla,
           color: d.TeamColour ? `#${d.TeamColour}` : "#808080",
           x: xn,
           z: -yn,
+          position: o?.position ?? 99,
           inPit: pitSet.has(num) || p.status === "OffTrack",
           selected: selected.includes(num),
+          overtake: overtakeRef.current && !!o?.inRange,
+          named: namesRef.current,
         });
       }
       carLayer.sync(inputs);
@@ -176,13 +202,19 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
     engine.controls.setAspect(size.width / size.height);
   }, [engine, ready, size.width, size.height]);
 
-  // Follow the most recently selected driver
+  // Follow the most recently selected driver, zoomed in to where you can see which side
+  // of the road each car is on; back out to the view's usual distance afterwards
+  const followedRef = useRef(false);
   useEffect(() => {
     if (!engine) return;
     if (!follow) {
       engine.controls.setFollowTarget(null);
+      if (followedRef.current) engine.controls.zoomTo(VIEW_PRESETS[preset].r);
+      followedRef.current = false;
       return;
     }
+    followedRef.current = true;
+    engine.controls.zoomTo(FOLLOW_ZOOM);
     const v = new THREE.Vector3();
     engine.controls.setFollowTarget(() => {
       const num = usePitwall.getState().selected[0];
@@ -192,6 +224,7 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
       const [xn, yn] = toTrack!(p.x, p.y);
       return v.set(xn, 0, -yn);
     });
+    // The preset is only read on the way out, so it isn't a dependency
   }, [engine, follow, toTrack]);
 
   const applyPreset = (p: ViewPreset) => {
@@ -224,14 +257,30 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
           ))}
         {(geometry?.overtakeZones?.length ?? 0) > 0 && (
           <span className="flex items-center gap-1" title="Overtake zones: the main flat-out stretches (2026 has no DRS)">
-            <i className="h-2 w-2 rounded-sm" style={{ background: DRS_COLOR }} />OT
+            <i className="h-0.5 w-3 rounded-sm" style={{ background: DRS_COLOR }} />OT
+          </span>
+        )}
+        {isRace && overtakeEnabled && (
+          <span className="flex items-center gap-1 normal-case tracking-normal" title="Within a second of the car ahead: Overtake Mode is open to them (estimated from the live interval)">
+            <i className="h-2.5 w-2.5 rounded-full" style={{ boxShadow: `0 0 0 2px ${DRS_COLOR}` }} />
+            within 1 s
           </span>
         )}
       </div>
 
       <div className="absolute bottom-2 right-2 flex flex-col items-end gap-1.5">
         <div className="flex gap-1.5">
-          <MapButton active={follow} onClick={() => setFollow((f) => !f)} title="Follow the selected driver">
+          <MapButton
+            active={names}
+            onClick={() => {
+              setNames(!names);
+              saveValue("map:names", !names);
+            }}
+            title="Show every driver's code beside their number (selected drivers always show theirs)"
+          >
+            names
+          </MapButton>
+          <MapButton active={follow} onClick={() => setFollow((f) => !f)} title="Follow the selected driver, zoomed in">
             follow
           </MapButton>
           {(["top", "3d"] as ViewPreset[]).map((p) => (

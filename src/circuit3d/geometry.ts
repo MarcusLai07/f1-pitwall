@@ -1,14 +1,19 @@
 import * as THREE from "three";
 import type { CircuitGeometry } from "../circuits/geometry-schema";
+import { Line2 } from "three/examples/jsm/lines/Line2.js";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import {
+  ASPHALT_COLOR,
   BASE_LIFT,
+  EDGE_PX,
   ELEV_EXAGGERATION,
   FALLBACK_METERS_PER_UNIT,
   FALLBACK_SAMPLES,
+  ROAD_SEGMENTS,
   SECTOR_COLORS,
-  TUBE_RADIAL_SEGMENTS,
-  TUBE_SEGMENTS,
   WALL_SEGMENTS,
+  ZONE_PX,
 } from "./constants";
 
 /** Geometry-space points: x/y normalized plan coords (y up) -> three (x, elev, -y). */
@@ -61,44 +66,6 @@ export function buildCurve(pts: THREE.Vector3[]): THREE.CatmullRomCurve3 {
   return new THREE.CatmullRomCurve3(pts, true, "catmullrom", 0.08);
 }
 
-export function buildTube(
-  curve: THREE.CatmullRomCurve3,
-  sectors: [number, number] | null,
-  radius: number
-): { geo: THREE.TubeGeometry; mat: THREE.MeshStandardMaterial } {
-  const geo = new THREE.TubeGeometry(curve, TUBE_SEGMENTS, radius, TUBE_RADIAL_SEGMENTS, true);
-  const mat = new THREE.MeshStandardMaterial({
-    roughness: 0.35,
-    metalness: 0.15,
-    transparent: true,
-    opacity: 0,
-  });
-  if (sectors) {
-    applySectorColors(geo, sectors);
-    mat.vertexColors = true;
-  } else {
-    mat.color = new THREE.Color(SECTOR_COLORS[0]);
-  }
-  return { geo, mat };
-}
-
-/** Per-vertex sector colors for a closed TubeGeometry (verts ordered tubular x radial). */
-function applySectorColors(tubeGeo: THREE.TubeGeometry, sectors: [number, number]) {
-  const count = tubeGeo.attributes.position.count;
-  const colors = new Float32Array(count * 3);
-  const cols = SECTOR_COLORS.map((c) => new THREE.Color(c));
-  const [b1, b2] = sectors;
-  for (let i = 0; i < count; i++) {
-    const seg = Math.floor(i / (TUBE_RADIAL_SEGMENTS + 1));
-    const t = seg / TUBE_SEGMENTS;
-    const c = cols[t < b1 ? 0 : t < b2 ? 1 : 2];
-    colors[i * 3] = c.r;
-    colors[i * 3 + 1] = c.g;
-    colors[i * 3 + 2] = c.b;
-  }
-  tubeGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-}
-
 /** Translucent ribbon from the track down to the floor — the elevation cue. */
 export function buildWallGeometry(curve: THREE.CatmullRomCurve3): THREE.BufferGeometry {
   const positions = new Float32Array((WALL_SEGMENTS + 1) * 2 * 3);
@@ -117,43 +84,6 @@ export function buildWallGeometry(curve: THREE.CatmullRomCurve3): THREE.BufferGe
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return geo;
-}
-
-/** Overlay tube segments marking DRS zones (kept separate from sector colors). */
-export function buildDrsBands(
-  curve: THREE.CatmullRomCurve3,
-  bands: [number, number][],
-  radius: number,
-  color: string
-): THREE.Mesh[] {
-  const meshes: THREE.Mesh[] = [];
-  const mat = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-  });
-  const addSegment = (a: number, b: number) => {
-    if (b - a < 0.002) return;
-    const samples = Math.max(8, Math.round((b - a) * 200));
-    const pts: THREE.Vector3[] = [];
-    for (let i = 0; i <= samples; i++) {
-      pts.push(curve.getPointAt(a + ((b - a) * i) / samples));
-    }
-    const sub = new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.05);
-    const geo = new THREE.TubeGeometry(sub, samples * 2, radius, 8, false);
-    meshes.push(new THREE.Mesh(geo, mat));
-  };
-  for (const [a, b] of bands) {
-    const a1 = ((a % 1) + 1) % 1;
-    const b1 = ((b % 1) + 1) % 1;
-    if (b1 >= a1) addSegment(a1, b1);
-    else {
-      addSegment(a1, 1);
-      addSegment(0, b1);
-    }
-  }
-  return meshes;
 }
 
 /** Cheap elevation lookup: nearest of the curve's uniform samples.
@@ -212,4 +142,85 @@ export function makeElevationSampler(curve: THREE.CatmullRomCurve3, samples = 24
     if (hint) hint.index = best;
     return py[best];
   };
+}
+
+/**
+ * The track as a road at its real width: a flat asphalt strip, and its two edges as
+ * screen-width lines coloured by sector (the "double line"), so zoomed in you can see
+ * where across the track a car is. The centreline is a recorded racing line, so left
+ * and right are relative to that, to within a few metres.
+ */
+export function buildRoad(
+  curve: THREE.CatmullRomCurve3,
+  halfWidth: number,
+  sectors: [number, number] | null,
+  segments = ROAD_SEGMENTS
+): { asphalt: THREE.Mesh; edges: Line2[]; edgeMat: LineMaterial } {
+  const left: number[] = [];
+  const right: number[] = [];
+  const colors: number[] = [];
+  const cols = SECTOR_COLORS.map((c) => new THREE.Color(c));
+  const tri: number[] = [];
+  const verts: number[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const u = (i % segments) / segments;
+    const p = curve.getPointAt(u);
+    const t = curve.getTangentAt(u);
+    // Perpendicular in the ground plane
+    const len = Math.hypot(t.x, t.z) || 1;
+    const nx = -t.z / len;
+    const nz = t.x / len;
+    left.push(p.x + nx * halfWidth, p.y, p.z + nz * halfWidth);
+    right.push(p.x - nx * halfWidth, p.y, p.z - nz * halfWidth);
+    const c = sectors ? cols[u < sectors[0] ? 0 : u < sectors[1] ? 1 : 2] : cols[0];
+    colors.push(c.r, c.g, c.b);
+    verts.push(p.x + nx * halfWidth, p.y - 0.001, p.z + nz * halfWidth, p.x - nx * halfWidth, p.y - 0.001, p.z - nz * halfWidth);
+    if (i < segments) {
+      const a = i * 2;
+      tri.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(tri);
+  const asphalt = new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({ color: ASPHALT_COLOR, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false })
+  );
+  const edgeMat = new LineMaterial({ linewidth: EDGE_PX, vertexColors: true, worldUnits: false, transparent: true });
+  const edges = [left, right].map((positions) => {
+    const g = new LineGeometry();
+    g.setPositions(positions);
+    g.setColors(colors);
+    return new Line2(g, edgeMat);
+  });
+  return { asphalt, edges, edgeMat };
+}
+
+/** Overtake zones as a green line down the middle of the road */
+export function buildZoneLines(curve: THREE.CatmullRomCurve3, bands: [number, number][], color: string): { lines: Line2[]; mat: LineMaterial } {
+  const mat = new LineMaterial({ color: new THREE.Color(color).getHex(), linewidth: ZONE_PX, worldUnits: false, transparent: true, opacity: 0.9 });
+  const lines: Line2[] = [];
+  const add = (a: number, b: number) => {
+    if (b - a < 0.002) return;
+    const n = Math.max(8, Math.round((b - a) * 600));
+    const pos: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const p = curve.getPointAt(a + ((b - a) * i) / n);
+      pos.push(p.x, p.y + 0.0005, p.z);
+    }
+    const g = new LineGeometry();
+    g.setPositions(pos);
+    lines.push(new Line2(g, mat));
+  };
+  for (const [a, b] of bands) {
+    const a1 = ((a % 1) + 1) % 1;
+    const b1 = ((b % 1) + 1) % 1;
+    if (b1 >= a1) add(a1, b1);
+    else {
+      add(a1, 1);
+      add(0, b1);
+    }
+  }
+  return { lines, mat };
 }

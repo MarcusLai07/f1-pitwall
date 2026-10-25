@@ -3,14 +3,19 @@ export const DRS_COLOR = "#22c55e";
 
 export const ELEV_EXAGGERATION = 3;
 export const BASE_LIFT = 0.03;
-export const TUBE_RADIUS = 0.013;
-export const TUBE_SEGMENTS = 560;
-export const TUBE_RADIAL_SEGMENTS = 10;
 export const WALL_SEGMENTS = 300;
 export const FALLBACK_SAMPLES = 240;
 export const FALLBACK_METERS_PER_UNIT = 1200;
 
-export const ZOOM_MIN = 1.3;
+// The road: real width, with edge and overtake-zone lines in screen pixels
+export const TRACK_WIDTH_M = 15;
+export const ROAD_SEGMENTS = 1400;
+export const ASPHALT_COLOR = 0x23262d;
+export const EDGE_PX = 2;
+export const ZONE_PX = 2.5;
+
+// Close enough to see where across the track each car is
+export const ZOOM_MIN = 0.22;
 export const ZOOM_MAX = 4.4;
 export const PHI_MIN = 0.06;
 export const PHI_MAX = 1.35;

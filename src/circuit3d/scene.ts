@@ -8,16 +8,15 @@ import "animejs/adapters/three";
 if (typeof window !== "undefined") {
   (window as unknown as Record<string, unknown>).__animeEngine = engine;
 }
+import type { Line2 } from "three/examples/jsm/lines/Line2.js";
+import type { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { CircuitGeometry } from "../circuits/geometry-schema";
-import {
-  DRS_COLOR,
-  TUBE_RADIUS,
-} from "./constants";
+import { DRS_COLOR, FALLBACK_METERS_PER_UNIT, TRACK_WIDTH_M } from "./constants";
 import {
   buildCurve,
-  buildDrsBands,
-  buildTube,
+  buildRoad,
   buildWallGeometry,
+  buildZoneLines,
   makeElevationSampler,
   pointsFromGeometry,
   pointsFromSvgPath,
@@ -27,7 +26,7 @@ export interface CircuitSceneOptions {
   geometry: CircuitGeometry | null;
   /** SVG path fallback when geometry is null */
   svgPath?: string;
-  /** DRS bands as lap-fraction ranges */
+  /** Overtake zones as lap-fraction ranges */
   drsBands?: [number, number][];
   width: number;
   height: number;
@@ -39,13 +38,11 @@ export interface SceneHandle {
   renderer: THREE.WebGLRenderer;
   group: THREE.Group;
   curve: THREE.CatmullRomCurve3;
-  tube: THREE.Mesh;
-  tubeGeo: THREE.TubeGeometry;
-  tubeMat: THREE.MeshStandardMaterial;
+  /** Group units per metre, for sizing things in real distances */
+  unitsPerMeter: number;
   wallGeo: THREE.BufferGeometry;
   wallMat: THREE.MeshBasicMaterial;
   marker: THREE.Mesh;
-  drsMeshes: THREE.Mesh[];
   width: number;
   height: number;
   elevationAt: (x: number, z: number, hint?: { index: number }) => number;
@@ -66,7 +63,8 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
   host.insertBefore(renderer.domElement, host.firstChild);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 50);
+  // Near plane close in: zoomed right into a corner the camera is very near the track
+  const camera = new THREE.PerspectiveCamera(38, width / height, 0.005, 50);
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.75));
   const key = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -87,9 +85,13 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
     : pointsFromSvgPath(opts.svgPath ?? "M0 0 L1 1");
   const curve = buildCurve(pts);
 
-  const { geo: tubeGeo, mat: tubeMat } = buildTube(curve, opts.geometry?.sectors ?? null, TUBE_RADIUS);
-  const tube = new THREE.Mesh(tubeGeo, tubeMat);
-  group.add(tube);
+  const metersPerUnit = opts.geometry ? opts.geometry.transform.scale * (opts.geometry.transform.scaleAdjust || 1) : FALLBACK_METERS_PER_UNIT;
+  const road = buildRoad(curve, TRACK_WIDTH_M / 2 / metersPerUnit, opts.geometry?.sectors ?? null);
+  group.add(road.asphalt, ...road.edges);
+  const zones = buildZoneLines(curve, opts.drsBands ?? [], DRS_COLOR);
+  zones.lines.forEach((l) => group.add(l));
+  const lineMats: LineMaterial[] = [road.edgeMat, zones.mat];
+  for (const m of lineMats) m.resolution.set(width, height);
 
   const wallGeo = buildWallGeometry(curve);
   const wallMat = new THREE.MeshBasicMaterial({
@@ -101,16 +103,16 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
   });
   group.add(new THREE.Mesh(wallGeo, wallMat));
 
-  const drsMeshes = buildDrsBands(curve, opts.drsBands ?? [], TUBE_RADIUS * 1.35, DRS_COLOR);
-  drsMeshes.forEach((m) => group.add(m));
-
+  // Start/finish: a white line painted across the road
   const startPt = curve.getPointAt(0);
+  const startDir = curve.getTangentAt(0);
   const marker = new THREE.Mesh(
-    new THREE.BoxGeometry(0.05, 0.05, 0.012),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
+    new THREE.BoxGeometry((TRACK_WIDTH_M * 1.3) / metersPerUnit, 0.0004, 3 / metersPerUnit),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 })
   );
   marker.position.copy(startPt);
-  marker.position.y += 0.045;
+  marker.position.y += 0.0008;
+  marker.rotation.y = Math.atan2(startDir.x, startDir.z);
   group.add(marker);
 
   const elevationAt = makeElevationSampler(curve);
@@ -129,13 +131,10 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
     renderer,
     group,
     curve,
-    tube,
-    tubeGeo,
-    tubeMat,
+    unitsPerMeter: 1 / metersPerUnit,
     wallGeo,
     wallMat,
     marker,
-    drsMeshes,
     width,
     height,
     elevationAt,
@@ -148,22 +147,22 @@ export function createCircuitScene(host: HTMLElement, opts: CircuitSceneOptions)
       renderer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      for (const m of lineMats) m.resolution.set(w, h);
       handle.width = w;
       handle.height = h;
     },
     dispose: () => {
       renderTimer.cancel();
       frameCbs.clear();
-      tubeGeo.dispose();
-      tubeMat.dispose();
+      road.asphalt.geometry.dispose();
+      (road.asphalt.material as THREE.Material).dispose();
+      const lines: Line2[] = [...road.edges, ...zones.lines];
+      for (const l of lines) l.geometry.dispose();
+      for (const m of lineMats) m.dispose();
       wallGeo.dispose();
       wallMat.dispose();
       marker.geometry.dispose();
       (marker.material as THREE.Material).dispose();
-      drsMeshes.forEach((m) => {
-        m.geometry.dispose();
-        (m.material as THREE.Material).dispose();
-      });
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
       renderer.dispose();

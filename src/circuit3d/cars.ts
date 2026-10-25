@@ -1,27 +1,32 @@
 import * as THREE from "three";
-import type { SceneHandle } from "./scene";
+import { isLightColor } from "../lib/format";
 import type { LabelProjector } from "./labels";
+import type { SceneHandle } from "./scene";
 
 /** Normalized-space render state for one car (already GPS-mapped or estimated). */
 export interface CarRenderInput {
-  code: string;
+  num: string; // racing number, shown in the dot
+  code: string; // TLA, shown beside it when named
   color: string; // team color, hex
   /** three group-space coords (x, z); y comes from the elevation sampler */
   x: number;
   z: number;
+  position: number; // race order: the leader's dot is drawn on top
   inPit: boolean;
   selected: boolean;
+  /** Within a second of the car ahead while Overtake Mode is enabled */
+  overtake: boolean;
+  /** Show the TLA beside the number */
+  named: boolean;
 }
 
 interface CarEntry {
-  mesh: THREE.Mesh;
-  mat: THREE.MeshBasicMaterial;
-  chip: HTMLElement;
+  dot: HTMLElement;
+  number: HTMLElement;
+  tag: HTMLElement;
   anchor: THREE.Vector3;
-  color: string;
   elevHint: { index: number };
-  inPit: boolean | null;
-  selected: boolean | null;
+  key: string; // last applied look, to skip unchanged style writes
 }
 
 export interface CarLayer {
@@ -30,98 +35,85 @@ export interface CarLayer {
   dispose: () => void;
 }
 
-const CAR_RADIUS = 0.022;
-const CHIP_LIFT = 0.075;
+// Dots keep their size on screen, so zooming in shows where across the road each car is
+const DOT_PX = 17;
+const DOT_SELECTED_PX = 21;
+const DOT_PIT_PX = 13;
+const OVERTAKE_COLOR = "#22c55e";
 
-export function createCarLayer(
-  handle: SceneHandle,
-  projector: LabelProjector,
-  chipContainer: HTMLElement
-): CarLayer {
-  const sphereGeo = new THREE.SphereGeometry(CAR_RADIUS, 16, 16);
+/**
+ * Cars as team-coloured dots carrying their racing number, placed exactly where the car
+ * is (HTML over the canvas, positioned by the label projector).
+ */
+export function createCarLayer(handle: SceneHandle, projector: LabelProjector, container: HTMLElement): CarLayer {
   const cars = new Map<string, CarEntry>();
 
   const unsubFrame = handle.onFrame(() => {
-    // Keep car height glued to the track as it lerps + keep chip anchored
-    for (const car of cars.values()) {
-      car.mesh.position.y =
-        handle.elevationAt(car.mesh.position.x, car.mesh.position.z, car.elevHint) + 0.012;
-      car.anchor.set(car.mesh.position.x, car.mesh.position.y + CHIP_LIFT, car.mesh.position.z);
-    }
+    // Keep each dot on the track surface as the elevation changes under it
+    for (const car of cars.values()) car.anchor.y = handle.elevationAt(car.anchor.x, car.anchor.z, car.elevHint) + 0.0015;
   });
 
   const addCar = (input: CarRenderInput): CarEntry => {
-    const mat = new THREE.MeshBasicMaterial({ color: input.color });
-    const mesh = new THREE.Mesh(sphereGeo, mat);
-    mesh.position.set(input.x, 0, input.z);
-    handle.group.add(mesh);
+    const dot = document.createElement("div");
+    dot.className = "absolute left-0 top-0 flex items-center justify-center rounded-full font-f1 font-black tabular-nums pointer-events-none";
+    const number = document.createElement("span");
+    const tag = document.createElement("span");
+    tag.className = "absolute left-full top-1/2 ml-[3px] -translate-y-1/2 rounded bg-black/80 px-1 py-px text-[9px] font-bold tracking-wide whitespace-nowrap";
+    dot.append(number, tag);
+    container.appendChild(dot);
+    const anchor = new THREE.Vector3(input.x, 0, input.z);
+    projector.add(dot, anchor);
+    return { dot, number, tag, anchor, elevHint: { index: -1 }, key: "" };
+  };
 
-    const chip = document.createElement("span");
-    chip.className =
-      "absolute left-0 top-0 rounded px-1 py-px text-[9px] font-bold tracking-wide pointer-events-none border bg-black/75";
-    chip.textContent = input.code;
-    chip.style.color = input.color;
-    chip.style.borderColor = input.color + "66";
-    chipContainer.appendChild(chip);
-
-    const anchor = new THREE.Vector3(input.x, CHIP_LIFT, input.z);
-    projector.add(chip, anchor);
-
-    return { mesh, mat, chip, anchor, color: input.color, elevHint: { index: -1 }, inPit: null, selected: null };
+  const style = (car: CarEntry, input: CarRenderInput) => {
+    const key = [input.num, input.code, input.color, input.position, input.inPit, input.selected, input.overtake, input.named].join("|");
+    if (key === car.key) return;
+    car.key = key;
+    const size = input.selected ? DOT_SELECTED_PX : input.inPit ? DOT_PIT_PX : DOT_PX;
+    const s = car.dot.style;
+    s.width = s.height = `${size}px`;
+    s.background = input.color;
+    s.color = isLightColor(input.color) ? "#000" : "#fff";
+    s.fontSize = `${input.inPit ? 7.5 : input.selected ? 10.5 : 9}px`;
+    s.opacity = input.inPit ? "0.45" : "1";
+    s.zIndex = String((input.selected ? 300 : 200) - input.position);
+    const rings = ["0 0 0 1.5px rgba(0,0,0,0.7)", "0 1px 4px rgba(0,0,0,0.6)"];
+    if (input.selected) rings.unshift("0 0 0 2px #fff");
+    if (input.overtake) rings.unshift(`0 0 0 ${input.selected ? 4 : 2.5}px ${OVERTAKE_COLOR}`, `0 0 9px 2px ${OVERTAKE_COLOR}99`);
+    s.boxShadow = rings.join(", ");
+    car.number.textContent = input.num;
+    car.tag.textContent = input.code;
+    car.tag.style.color = input.color;
+    car.tag.style.display = input.named || input.selected ? "" : "none";
   };
 
   return {
     sync: (inputs) => {
       const seen = new Set<string>();
       for (const input of inputs) {
-        seen.add(input.code);
-        let car = cars.get(input.code);
-        if (!car) {
-          car = addCar(input);
-          cars.set(input.code, car);
-        }
+        seen.add(input.num);
+        let car = cars.get(input.num);
+        if (!car) cars.set(input.num, (car = addCar(input)));
         // Callers interpolate in time already, so positions are set directly each frame
-        car.mesh.position.x = input.x;
-        car.mesh.position.z = input.z;
-        if (car.color !== input.color) {
-          car.color = input.color;
-          car.mat.color.set(input.color);
-          car.chip.style.color = input.color;
-          car.chip.style.borderColor = input.color + "66";
-        }
-        if (car.inPit !== input.inPit) {
-          car.inPit = input.inPit;
-          car.mat.transparent = true;
-          car.mat.opacity = input.inPit ? 0.35 : 1;
-          car.chip.style.opacity = input.inPit ? "0.4" : "1";
-        }
-        if (car.selected !== input.selected) {
-          car.selected = input.selected;
-          car.mesh.scale.setScalar(input.selected ? 1.6 : 1);
-          car.chip.style.fontWeight = input.selected ? "900" : "700";
-          car.chip.style.zIndex = input.selected ? "10" : "1";
-        }
+        car.anchor.x = input.x;
+        car.anchor.z = input.z;
+        style(car, input);
       }
-      for (const [code, car] of cars) {
-        if (!seen.has(code)) {
-          projector.remove(car.chip);
-          car.chip.remove();
-          handle.group.remove(car.mesh);
-          car.mat.dispose();
-          cars.delete(code);
-        }
+      for (const [num, car] of cars) {
+        if (seen.has(num)) continue;
+        projector.remove(car.dot);
+        car.dot.remove();
+        cars.delete(num);
       }
     },
     dispose: () => {
       unsubFrame();
       for (const car of cars.values()) {
-        projector.remove(car.chip);
-        car.chip.remove();
-        handle.group.remove(car.mesh);
-        car.mat.dispose();
+        projector.remove(car.dot);
+        car.dot.remove();
       }
       cars.clear();
-      sphereGeo.dispose();
     },
   };
 }

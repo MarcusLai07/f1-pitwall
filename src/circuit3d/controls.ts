@@ -16,6 +16,8 @@ import {
 export interface OrbitControls {
   setPreset: (preset: ViewPreset) => void;
   zoomBy: (delta: number) => void;
+  /** Ease to a camera distance (VIEW_PRESETS scale) */
+  zoomTo: (r: number) => void;
   /** Camera follows the returned group-space point while set (live mode) */
   setFollowTarget: (fn: (() => THREE.Vector3 | null) | null) => void;
   /** Frame the whole track for this canvas aspect, centred */
@@ -177,6 +179,10 @@ export function createOrbitControls(handle: SceneHandle, opts: OrbitOptions): Or
     zoomBy: (delta) => {
       idleMs = 0;
       zoomAnim.r(utils.clamp(view.r + delta, ZOOM_MIN, ZOOM_MAX));
+    },
+    zoomTo: (r) => {
+      idleMs = 0;
+      animate(view, { r: utils.clamp(r, ZOOM_MIN, ZOOM_MAX), duration: 700, ease: "inOut(2)" });
     },
     setAspect: (aspect) => {
       if (!(aspect > 0)) return;
