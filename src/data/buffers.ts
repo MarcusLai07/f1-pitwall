@@ -144,3 +144,21 @@ export function carHistory(num: string, from: number, to: number): CarSample[] {
 export function trackTraces(): ReadonlyMap<string, TrackSample[]> {
   return traces;
 }
+
+/** A replay's whole position history: lets the map work out the track before playback */
+export interface PositionHistory {
+  times: number[];
+  /** Position frames [from, to) by index into times */
+  between: (from: number, to: number) => PositionFrame[];
+}
+
+let history: PositionHistory | null = null;
+
+/** Set by a replay, cleared by live mode (which only has what it has seen) */
+export function setPositionHistory(h: PositionHistory | null) {
+  history = h;
+}
+
+export function positionHistory(): PositionHistory | null {
+  return history;
+}

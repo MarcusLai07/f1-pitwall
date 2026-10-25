@@ -7,7 +7,7 @@
 import { parseUtc } from "../lib/format";
 import { f1Token, reportRefused, watchF1Account } from "../sessions/f1account";
 import { inflate, merge } from "./archive";
-import { ingestCarData, ingestPositions, resetBuffers } from "./buffers";
+import { ingestCarData, ingestPositions, resetBuffers, setPositionHistory } from "./buffers";
 import { feedLaps, resetLaps } from "./laps";
 import { feedPits, resetPits } from "./pits";
 import { setWallNow, trackNow, usePitwall } from "./store";
@@ -61,6 +61,7 @@ export function startF1Live(delayMs: () => number): () => void {
   let failures = 0;
 
   resetBuffers();
+  setPositionHistory(null);
   resetLaps();
   resetPits();
   setWallNow(() => Date.now());

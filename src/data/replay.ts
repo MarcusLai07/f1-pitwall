@@ -3,7 +3,7 @@
 // older MultiViewer recordings (one state per line, gzip NDJSON; ?replay= on the dev page).
 
 import { parseUtc } from "../lib/format";
-import { ingestCarData, ingestPositions, resetBuffers } from "./buffers";
+import { ingestCarData, ingestPositions, resetBuffers, setPositionHistory } from "./buffers";
 import { apply, diff } from "./diff";
 import { bumpLaps, feedLaps, resetLaps } from "./laps";
 import { bumpPits, feedPits, resetPits } from "./pits";
@@ -174,6 +174,7 @@ export function startReplay(rec: Recording): ReplayControls {
   const now = () => (playing ? Math.min(end, anchorAt + (performance.now() - anchorPerf) * speed) : anchorAt);
   setWallNow(now);
   resetBuffers();
+  setPositionHistory({ times: rec.positionTimes, between: rec.positionsBetween });
   resetLaps();
   resetPits();
 

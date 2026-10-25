@@ -54,10 +54,15 @@ const BY_SHORT_NAME: Record<string, string> = {
 
 export function circuitIdFor(info: SessionInfo | undefined): string | null {
   const short = info?.Meeting?.Circuit?.ShortName?.toLowerCase().trim();
-  if (short && BY_SHORT_NAME[short]) return BY_SHORT_NAME[short];
   const ids = Object.keys(circuitFiles).map((p) => p.split("/").pop()!.replace(".json", ""));
-  const hay = [short, info?.Meeting?.Location, info?.Meeting?.Name].filter(Boolean).join(" ").toLowerCase();
-  return ids.find((id) => hay.includes(id.replace(/-/g, " "))) ?? null;
+  const named = (hay: string) => ids.find((id) => hay.includes(id.replace(/-/g, " "))) ?? null;
+  if (short) {
+    // Trust F1's circuit name. An event can move: the 2026 "Bahrain Grand Prix" ran at
+    // Kuala Lumpur, so matching on the meeting name would draw Sakhir under Sepang.
+    // An unknown circuit gets no stored shape; the map builds one from positions.
+    return BY_SHORT_NAME[short] ?? named(short);
+  }
+  return named([info?.Meeting?.Location, info?.Meeting?.Name].filter(Boolean).join(" ").toLowerCase());
 }
 
 export async function loadCircuit(id: string): Promise<{ circuit: CircuitData; geometry: CircuitGeometry | null } | null> {
