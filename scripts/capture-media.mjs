@@ -1,6 +1,9 @@
 // Records the README screenshots and demo video: the built extension (dist) in headless
 // Chrome for Testing, playing back a saved session recording. F1's sign-in requests are
-// answered here with stand-ins, so nothing is sent to F1.
+// answered here with stand-ins, so nothing is sent to F1. The schedule (OpenF1, which
+// shuts out free users while a session is live) is served from a baked fixture so the
+// Calendar and Race brief always fill in; the championship, weather, Pirelli nomination
+// and strategy come from their real sources (Jolpica, Open-Meteo, GitHub).
 //
 //   npm run build && node scripts/capture-media.mjs recordings/2026-us-gp-fp3.ndjson.gz
 //
@@ -28,6 +31,12 @@ if (!fs.existsSync(path.join(dist, "manifest.json"))) throw new Error("Build fir
 if (!fs.existsSync(recording)) throw new Error(`No recording at ${recording}`);
 fs.mkdirSync(out, { recursive: true });
 
+// Baked OpenF1 schedule for the current season, so the Calendar and Race brief fill in
+// even when OpenF1 is shut (it refuses free users while any session is live). Built from
+// Jolpica with scripts/media/season-<year>.json; falls through to the network if absent.
+const seasonFixture = path.join(root, "scripts/media", `season-${new Date().getFullYear()}.json`);
+const season = fs.existsSync(seasonFixture) ? JSON.parse(fs.readFileSync(seasonFixture, "utf8")) : null;
+
 const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), "pitwall-media-")), {
   executablePath: CHROME,
   headless: true,
@@ -53,6 +62,13 @@ await ctx.route("https://id.formula1.com/**", (r) =>
     ? r.fulfill({ json: { id: "media", eventName: "continue", interactionId: "media", _links: { next: { href: "https://id.formula1.com/media" } } } })
     : r.abort()
 );
+// The season schedule, from the fixture (Jolpica, Open-Meteo and GitHub stay live)
+if (season)
+  await ctx.route("https://api.openf1.org/**", (r) => {
+    const p = new URL(r.request().url()).pathname;
+    const body = p.endsWith("/meetings") ? season.meetings : p.endsWith("/sessions") ? season.sessions : null;
+    return body ? r.fulfill({ json: body, headers: { "access-control-allow-origin": "*" } }) : r.continue();
+  });
 
 let [sw] = ctx.serviceWorkers();
 sw ??= await ctx.waitForEvent("serviceworker");
@@ -98,6 +114,15 @@ async function clickOn(page, locator, ms) {
   await page.mouse.down();
   await wait(80);
   await page.mouse.up();
+}
+// Top-bar pop-ups (Championship, Calendar) sit under a full-screen catcher; a click
+// anywhere closes the open one. Drop the cursor on the map to dismiss before the next.
+async function dismissTop(page, ms = 300) {
+  await glide(page, W * 0.4, H * 0.42, ms);
+  await page.mouse.down();
+  await wait(60);
+  await page.mouse.up();
+  await wait(250);
 }
 // Tower rows carry "Name · Team" titles; the k-th one is the k-th car on the board
 const driver = (page, k) => page.locator('[title*=" · "]').nth(k);
@@ -149,6 +174,26 @@ await wait(1200);
 await shot(page, "drawer.png", await around(page, `[...document.querySelector("#pitwall-root .pointer-events-none.absolute.bottom-0.z-40").children].slice(-2)`, 0));
 await page.getByRole("button", { name: "Race control", exact: true }).click();
 
+// Race brief: the next race's weather, stakes, Pirelli compounds, strategy, tyres, circuit
+await page.getByRole("button", { name: "Race brief" }).click();
+await wait(4500);
+await shot(page, "racebrief.png", await around(page, `[...document.querySelector("#pitwall-root .pointer-events-none.absolute.bottom-0.z-40").children].slice(-2)`, 0));
+await page.getByRole("button", { name: "Race brief" }).click();
+
+// Championship: standings, the title race, with a driver's season expanded
+await page.getByRole("button", { name: "Championship", exact: true }).click();
+await wait(4500);
+await page.locator('[aria-expanded]').nth(2).click(); // a driver's per-race results
+await wait(2600);
+await shot(page, "championship.png", await around(page, `[document.querySelector('[class*="w-[min(560px"]')]`, 14));
+await dismissTop(page);
+
+// Calendar: the season in a month grid, the next round's sessions beside it
+await page.getByRole("button", { name: "Calendar", exact: true }).click();
+await wait(4500);
+await shot(page, "calendar.png", await around(page, `[document.querySelector('[class*="w-[min(660px"]')]`, 14));
+await dismissTop(page);
+
 await page.getByRole("button", { name: "Sessions", exact: true }).click();
 await wait(4000); // the season's schedule
 await page.getByRole("button", { name: /Sign in to F1 TV/ }).click();
@@ -177,39 +222,41 @@ cdp.on("Page.screencastFrame", async ({ data, metadata, sessionId }) => {
   shots.push({ file, t: metadata.timestamp });
   await cdp.send("Page.screencastFrameAck", { sessionId }).catch(() => {});
 });
-await cdp.send("Page.startScreencast", { format: "jpeg", quality: 88, maxWidth: W, maxHeight: H });
+await cdp.send("Page.startScreencast", { format: "jpeg", quality: 85, maxWidth: W, maxHeight: H });
 
 await glide(demo, W * 0.55, H * 0.45, 600);
-await wait(2000);
+await wait(1600);
 // Pick drivers: telemetry cards appear, the extras open out to the left
-for (const k of [0, 1, 2, 3]) {
-  await clickOn(demo, driver(demo, k), 500);
-  await wait(k < 3 ? 700 : 2200);
+for (const k of [0, 1, 2]) {
+  await clickOn(demo, driver(demo, k), 450);
+  await wait(k < 2 ? 650 : 1900);
 }
 // Tyre history
-await clickOn(demo, tyre(demo, 1), 600);
-await wait(2600);
+await clickOn(demo, tyre(demo, 1), 550);
+await wait(2300);
 await demo.keyboard.press("Escape");
 await wait(400);
 // The 3D map
-await clickOn(demo, demo.getByRole("button", { name: "3d", exact: true }), 700);
-await wait(2400);
+await clickOn(demo, demo.getByRole("button", { name: "3d", exact: true }), 650);
+await wait(2000);
 await clickOn(demo, demo.getByRole("button", { name: "top", exact: true }), 400);
-await wait(800);
-// Race control drawer
-await clickOn(demo, demo.getByRole("button", { name: "Race control", exact: true }), 700);
+await wait(1400);
+// Race brief
+await clickOn(demo, demo.getByRole("button", { name: "Race brief" }), 650);
+await wait(3600);
+await clickOn(demo, demo.getByRole("button", { name: "Race brief" }), 300);
+await wait(400);
+// Championship, expanding a driver's season
+await clickOn(demo, demo.getByRole("button", { name: "Championship", exact: true }), 650);
+await wait(2200);
+await clickOn(demo, demo.locator('[aria-expanded]').nth(2), 450);
 await wait(2400);
-await clickOn(demo, demo.getByRole("button", { name: "Race control", exact: true }), 300);
-await wait(500);
-// Sessions
-await clickOn(demo, demo.getByRole("button", { name: "Sessions", exact: true }), 700);
-await wait(3000);
-await glide(demo, W * 0.8, H * 0.45, 400);
-await demo.mouse.wheel(0, 240);
-await wait(1800);
-await demo.keyboard.press("Escape");
-await clickOn(demo, demo.getByRole("button", { name: "Sessions", exact: true }), 400);
-await wait(1500);
+await dismissTop(demo);
+// Calendar
+await clickOn(demo, demo.getByRole("button", { name: "Calendar", exact: true }), 550);
+await wait(2800);
+await dismissTop(demo);
+await wait(400);
 await cdp.send("Page.stopScreencast");
 await wait(300);
 await ctx.close();
@@ -220,7 +267,7 @@ const list = shots
   .join("\n");
 fs.writeFileSync(path.join(frames, "list.txt"), `${list}\nfile '${shots.at(-1).file}'\n`);
 const ff = (...a) => execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...a], { stdio: "inherit" });
-ff("-f", "concat", "-safe", "0", "-i", path.join(frames, "list.txt"), "-vf", "fps=30,scale=1440:-2:flags=lanczos", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "22", "-movflags", "+faststart", path.join(out, "demo.mp4"));
-ff("-i", path.join(out, "demo.mp4"), "-vf", "fps=9,scale=780:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle", path.join(out, "demo.gif"));
+ff("-f", "concat", "-safe", "0", "-i", path.join(frames, "list.txt"), "-vf", "fps=30,scale=1440:-2:flags=lanczos", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23", "-movflags", "+faststart", path.join(out, "demo.mp4"));
+ff("-i", path.join(out, "demo.mp4"), "-vf", "fps=8,scale=760:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=112:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle", path.join(out, "demo.gif"));
 fs.rmSync(frames, { recursive: true, force: true });
 console.log(`saved demo.mp4, demo.gif (${shots.length} frames)`);
