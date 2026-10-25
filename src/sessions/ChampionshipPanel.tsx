@@ -6,7 +6,7 @@ import { animate } from "animejs";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn, isLightColor } from "../lib/format";
 import { ensureSeason } from "./schedule";
-import { TEAMS_2026, useChampionship, type ConstructorStanding, type DriverStanding, type TitleRace } from "./championship";
+import { driverResults, TEAMS_2026, useChampionship, type ConstructorStanding, type DriverStanding, type RaceResult, type TitleRace } from "./championship";
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -15,6 +15,7 @@ type Tab = "drivers" | "constructors" | "teams";
 export function ChampionshipPanel({ closing, onClose, onClosed }: { closing: boolean; onClose: () => void; onClosed: () => void }) {
   const { loading, error, standings, drivers, constructors } = useChampionship();
   const [tab, setTab] = useState<Tab>("drivers");
+  const [expanded, setExpanded] = useState<string | null>(null); // driverId whose results are open
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -78,9 +79,11 @@ export function ChampionshipPanel({ closing, onClose, onClosed }: { closing: boo
         {tab === "teams" ? (
           <TeamRoster constructors={standings?.constructors ?? []} />
         ) : tab === "constructors" ? (
-          standings?.constructors.map((c) => <ConstructorRow key={c.name} c={c} canWin={constructors?.canWin.has(c.position) ?? true} eliminated={!constructors?.canWin.has(c.position)} live={!!standings} />)
+          standings?.constructors.map((c) => <ConstructorRow key={c.name} c={c} canWin={constructors?.canWin.has(c.position) ?? true} />)
         ) : (
-          standings?.drivers.map((d) => <DriverRow key={d.code + d.position} d={d} canWin={drivers?.canWin.has(d.position) ?? true} />)
+          standings?.drivers.map((d) => (
+            <DriverRow key={d.id || d.code} d={d} canWin={drivers?.canWin.has(d.position) ?? true} open={expanded === d.id} onToggle={() => setExpanded((x) => (x === d.id ? null : d.id))} />
+          ))
         )}
       </div>
 
@@ -108,35 +111,84 @@ function TitleLine({ race, what }: { race: TitleRace<{ position: number; points:
   );
 }
 
-function Pos({ n }: { n: number }) {
-  return <span className="w-5 shrink-0 text-right text-[12px] font-bold tabular-nums text-zinc-500">{n}</span>;
-}
+// pos · number · code · name(1fr) · team · wins · points — fixed columns so every row lines up
+const ROW_COLS = "grid-cols-[1.25rem_1.5rem_2.25rem_minmax(0,1fr)_7rem_2.5rem_2.75rem]";
 
-function DriverRow({ d, canWin }: { d: DriverStanding; canWin: boolean }) {
+function DriverRow({ d, canWin, open, onToggle }: { d: DriverStanding; canWin: boolean; open: boolean; onToggle: () => void }) {
   return (
-    <div data-row className={cn("flex items-center gap-2 rounded-md px-2 py-1", !canWin && "opacity-55")}>
-      <Pos n={d.position} />
-      <span className="flex h-5 w-6 shrink-0 items-center justify-center rounded text-[10px] font-black tabular-nums" style={{ background: d.color, color: isLightColor(d.color) ? "#000" : "#fff" }}>
-        {d.number || d.code}
-      </span>
-      <span className="w-10 shrink-0 text-[12.5px] font-bold text-zinc-100">{d.code}</span>
-      <span className="min-w-0 flex-1 truncate text-[12px] text-zinc-400">{d.name}</span>
-      <i className="h-2.5 w-0.5 shrink-0 rounded" style={{ background: d.color }} />
-      <span className="w-16 truncate text-[11px] text-zinc-500">{d.team}</span>
-      {d.wins > 0 && <span className="w-9 text-right text-[10px] text-zinc-500">{d.wins} win{d.wins === 1 ? "" : "s"}</span>}
-      <span className="w-12 text-right text-[13px] font-black tabular-nums text-zinc-100">{d.points}</span>
+    <div data-row className={cn("rounded-md", !canWin && "opacity-55", open && "bg-zinc-900/60")}>
+      <button onClick={onToggle} aria-expanded={open} className={cn("grid w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-zinc-900", ROW_COLS)}>
+        <span className="text-right text-[12px] font-bold tabular-nums text-zinc-500">{d.position}</span>
+        <span className="flex h-5 w-6 items-center justify-center rounded text-[10px] font-black tabular-nums" style={{ background: d.color, color: isLightColor(d.color) ? "#000" : "#fff" }}>
+          {d.number || d.code}
+        </span>
+        <span className="text-[12.5px] font-bold text-zinc-100">{d.code}</span>
+        <span className="truncate text-[12px] text-zinc-400">{d.name}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <i className="h-3 w-0.5 shrink-0 rounded" style={{ background: d.color }} />
+          <span className="truncate text-[11px] text-zinc-500">{d.team}</span>
+        </span>
+        <span className="text-right text-[10px] text-zinc-500">{d.wins ? `${d.wins}W` : ""}</span>
+        <span className="flex items-center justify-end gap-1 text-[13px] font-black tabular-nums text-zinc-100">
+          {d.points}
+          <span className={cn("text-[8px] text-zinc-600 transition-transform", open && "rotate-180")}>▾</span>
+        </span>
+      </button>
+      {open && <DriverResults id={d.id} />}
     </div>
   );
 }
 
-function ConstructorRow({ c, canWin }: { c: ConstructorStanding; canWin: boolean; eliminated: boolean; live: boolean }) {
+function DriverResults({ id }: { id: string }) {
+  const [state, setState] = useState<RaceResult[] | "loading" | "error">("loading");
+  useEffect(() => {
+    let alive = true;
+    setState("loading");
+    driverResults(id)
+      .then((r) => alive && setState(r))
+      .catch(() => alive && setState("error"));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  if (state === "loading") return <p className="px-3 pb-2 text-[11px] text-zinc-500">Loading results…</p>;
+  if (state === "error") return <p className="px-3 pb-2 text-[11px] text-amber-400">Couldn't load this driver's results.</p>;
+  if (!state.length) return <p className="px-3 pb-2 text-[11px] text-zinc-500">No results yet.</p>;
   return (
-    <div data-row className={cn("flex items-center gap-2 rounded-md px-2 py-1", !canWin && "opacity-55")}>
-      <Pos n={c.position} />
-      <i className="h-4 w-1 shrink-0 rounded" style={{ background: c.color }} />
-      <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-zinc-100">{c.name}</span>
-      {c.wins > 0 && <span className="w-9 text-right text-[10px] text-zinc-500">{c.wins} win{c.wins === 1 ? "" : "s"}</span>}
-      <span className="w-12 text-right text-[13px] font-black tabular-nums text-zinc-100">{c.points}</span>
+    <div className="flex flex-wrap gap-1 px-3 pb-2 pt-0.5">
+      {state.map((r) => (
+        <span
+          key={r.round}
+          title={`Round ${r.round} · ${r.name} · ${r.dnf ? r.status : `P${r.position} (from P${r.grid})`} · ${r.points} pts`}
+          className={cn(
+            "flex w-[38px] flex-col items-center rounded border px-1 py-0.5 tabular-nums",
+            r.dnf
+              ? "border-red-500/30 bg-red-500/10 text-red-300"
+              : r.position === 1
+                ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                : (r.position ?? 99) <= 3
+                  ? "border-zinc-400/30 bg-zinc-400/10 text-zinc-100"
+                  : r.points > 0
+                    ? "border-sky-500/30 bg-sky-500/10 text-sky-200"
+                    : "border-zinc-700 bg-zinc-800/40 text-zinc-400"
+          )}
+        >
+          <span className="text-[8px] uppercase text-zinc-500">{r.name.slice(0, 3)}</span>
+          <span className="text-[11px] font-bold">{r.dnf ? "DNF" : `P${r.position}`}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ConstructorRow({ c, canWin }: { c: ConstructorStanding; canWin: boolean }) {
+  return (
+    <div data-row className={cn("grid grid-cols-[1.25rem_0.25rem_minmax(0,1fr)_2.5rem_2.75rem] items-center gap-2 rounded-md px-2 py-1", !canWin && "opacity-55")}>
+      <span className="text-right text-[12px] font-bold tabular-nums text-zinc-500">{c.position}</span>
+      <i className="h-4 w-1 rounded" style={{ background: c.color }} />
+      <span className="truncate text-[12.5px] font-semibold text-zinc-100">{c.name}</span>
+      <span className="text-right text-[10px] text-zinc-500">{c.wins ? `${c.wins}W` : ""}</span>
+      <span className="text-right text-[13px] font-black tabular-nums text-zinc-100">{c.points}</span>
     </div>
   );
 }

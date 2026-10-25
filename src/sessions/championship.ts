@@ -57,6 +57,7 @@ export function teamColor(name: string): string {
 
 export interface DriverStanding {
   position: number;
+  id: string; // Jolpica driverId, for per-race results
   code: string;
   number: number;
   name: string;
@@ -88,6 +89,7 @@ const REFRESH_MS = 10 * 60_000;
 let loadedAt = 0;
 
 interface JDriver {
+  driverId: string;
   code?: string;
   permanentNumber?: string;
   givenName: string;
@@ -121,6 +123,7 @@ export function ensureStandings() {
         const team = TEAM_ALIASES[d.Constructors[0]?.name] ?? d.Constructors[0]?.name ?? "";
         return {
           position: Number(d.position),
+          id: d.Driver.driverId,
           code: d.Driver.code ?? d.Driver.familyName.slice(0, 3).toUpperCase(),
           number: Number(d.Driver.permanentNumber) || 0,
           name: `${d.Driver.givenName} ${d.Driver.familyName}`,
@@ -191,4 +194,47 @@ export function useChampionship() {
     drivers: standings ? titleRace(standings.drivers, races, sprints) : null,
     constructors: standings ? titleRace(standings.constructors, races, sprints) : null,
   };
+}
+
+export interface RaceResult {
+  round: number;
+  name: string; // "Singapore"
+  position: number | null; // finishing position, null if no classified result
+  grid: number;
+  points: number;
+  status: string; // "Finished", "+1 Lap", "Accident"…
+  dnf: boolean;
+}
+
+const resultsCache = new Map<string, Promise<RaceResult[]>>();
+
+/** A driver's result in every round this season (cached); newest round last */
+export function driverResults(driverId: string): Promise<RaceResult[]> {
+  let p = resultsCache.get(driverId);
+  if (!p) {
+    p = fetchJson<{ MRData: { RaceTable: { Races: { round: string; raceName: string; Circuit: { Location: { locality: string } }; Results: { position: string; grid: string; points: string; status: string }[] }[] } } }>(
+      `current/drivers/${driverId}/results.json?limit=100`
+    )
+      .then((r) =>
+        r.MRData.RaceTable.Races.map((race) => {
+          const res = race.Results[0];
+          const status = res?.status ?? "";
+          return {
+            round: Number(race.round),
+            name: race.Circuit?.Location?.locality || race.raceName.replace(/ Grand Prix$/, ""),
+            position: res ? Number(res.position) : null,
+            grid: res ? Number(res.grid) : 0,
+            points: res ? Number(res.points) : 0,
+            status,
+            dnf: !/^(Finished|\+\d+ Lap)/.test(status),
+          };
+        })
+      )
+      .catch((err) => {
+        resultsCache.delete(driverId); // let a later open retry
+        throw err;
+      });
+    resultsCache.set(driverId, p);
+  }
+  return p;
 }
