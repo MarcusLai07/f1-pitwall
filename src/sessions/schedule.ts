@@ -82,6 +82,24 @@ export function useNextSession(): NextUp | null {
   return isSeason(nextYear) ? nextSession(nextYear.meetings, now) : null;
 }
 
+/** Races and sprints still to come this season, for the title-race maths */
+export function nextRounds(year: number, now = Date.now()): { races: number; sprints: number } {
+  const season = useSchedule.getState().seasons[year];
+  let races = 0;
+  let sprints = 0;
+  if (isSeason(season)) {
+    for (const m of season.meetings) {
+      if (m.cancelled) continue;
+      for (const s of m.sessions) {
+        if (s.start <= now) continue;
+        if (/^Race$/i.test(s.name)) races++;
+        else if (/^Sprint$/i.test(s.name)) sprints++;
+      }
+    }
+  }
+  return { races, sprints };
+}
+
 /** "Practice 1" → "FP1", "Sprint Qualifying" → "Sprint Quali"; Race, Sprint, Qualifying as they are */
 export function shortSessionName(name: string): string {
   const fp = /^Practice (\d)$/.exec(name);

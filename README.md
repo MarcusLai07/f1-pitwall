@@ -94,6 +94,7 @@ Straight from F1, in your browser. Pit Wall has no server.
 ## Use
 
 - **Sessions:** every session of a season, past, live and upcoming, in your time zone. **Replay** plays a past one from F1's archive and **Follow** switches to live. Your F1 TV sign-in sits top right.
+- **Championship:** the trophy button opens the drivers' and constructors' standings with the title race (how many can still win, points left, and when it's clinched), plus the team and driver roster. Standings come from Jolpica (the Ergast continuation); it works with no live session.
 - **Calendar:** the season at a glance: a month grid in your time zone with the race weekends marked (sprint weekends in purple), and the picked round's sessions with their times and a countdown.
 - **Source chip** (top right, e.g. *Live · F1 TV · 3 s behind* or *Replay · F1 TV archive*): what the board shows and where it comes from. Click it to set the live delay.
 - **Toolbar button:** opens Pit Wall in its own window (or focuses it). The window remembers its size and position.

@@ -46,6 +46,8 @@ export default defineConfig({
     // F1 sends no CORS headers; the extension gets around that with host_permissions,
     // the dev page goes through these proxies instead.
     proxy: {
+      // Jolpica (Ergast) standings; it sends no CORS headers either
+      "/jolpi": { target: "https://api.jolpi.ca", changeOrigin: true, rewrite: (p) => p.replace(/^\/jolpi/, "/ergast/f1") },
       // F1's timing archive and team radio clips (no CORS headers)
       "/f1static": {
         target: "https://livetiming.formula1.com",

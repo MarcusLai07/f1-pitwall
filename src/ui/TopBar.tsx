@@ -8,9 +8,10 @@ import { useTicker } from "./hooks";
 import { HeaderWeather } from "./HeaderWeather";
 import { currentScale, useUiScale } from "./scale";
 import { useF1Account } from "../sessions/f1account";
-import { CalendarIcon, LayoutIcon, RadioIcon, SessionsIcon } from "./icons";
+import { CalendarIcon, LayoutIcon, RadioIcon, SessionsIcon, TrophyIcon } from "./icons";
 import { shortSessionName, useNextSession } from "../sessions/schedule";
 import { CalendarPanel } from "../sessions/CalendarPanel";
+import { ChampionshipPanel } from "../sessions/ChampionshipPanel";
 import { SessionPicker } from "../sessions/SessionPicker";
 
 interface Props {
@@ -30,6 +31,7 @@ export function TopBar({ onGoLive, onOpenArchive }: Props) {
         <SourceStatus onGoLive={onGoLive} compact={compact} />
         <SessionsButton onGoLive={onGoLive} onOpenArchive={onOpenArchive} />
         <CalendarButton />
+        <ChampionshipButton />
         <LayoutMenu />
       </div>
     </header>
@@ -358,6 +360,28 @@ function CalendarButton() {
         <>
           <div className="fixed inset-0 z-40" onClick={close} />
           <CalendarPanel closing={state === "closing"} onClose={close} onClosed={() => setState("closed")} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ChampionshipButton() {
+  const [state, setState] = useState<"closed" | "open" | "closing">("closed");
+  const close = () => setState((s) => (s === "open" ? "closing" : s));
+  return (
+    <div className="relative">
+      <IconButton
+        label="Championship"
+        hint="Standings, the title race, teams and drivers"
+        icon={<TrophyIcon className="h-4 w-4" />}
+        active={state !== "closed"}
+        onClick={() => (state === "closed" ? setState("open") : close())}
+      />
+      {state !== "closed" && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={close} />
+          <ChampionshipPanel closing={state === "closing"} onClose={close} onClosed={() => setState("closed")} />
         </>
       )}
     </div>
