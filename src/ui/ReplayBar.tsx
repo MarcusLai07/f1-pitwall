@@ -14,14 +14,14 @@ export function ReplayBar({ controls }: { controls: ReplayControls }) {
       <button
         onClick={playing ? controls.pause : controls.play}
         className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-800 text-sm text-white hover:bg-zinc-700"
-        title={playing ? "Pause" : "Play"}
+        data-tip={playing ? "Pause" : "Play"}
       >
         {playing ? "❚❚" : "▶"}
       </button>
-      <button onClick={() => controls.seek(at - 10_000)} className="text-[10px] font-bold text-zinc-400 hover:text-white" title="Back 10 s">
+      <button onClick={() => controls.seek(at - 10_000)} className="text-[10px] font-bold text-zinc-400 hover:text-white" data-tip="Back 10 s">
         −10s
       </button>
-      <button onClick={() => controls.seek(at + 10_000)} className="text-[10px] font-bold text-zinc-400 hover:text-white" title="Forward 10 s">
+      <button onClick={() => controls.seek(at + 10_000)} className="text-[10px] font-bold text-zinc-400 hover:text-white" data-tip="Forward 10 s">
         +10s
       </button>
       <span className="w-14 text-right font-f1 text-xs font-bold tabular-nums text-zinc-200">{formatDuration(at - start)}</span>
@@ -46,7 +46,7 @@ export function ReplayBar({ controls }: { controls: ReplayControls }) {
           </button>
         ))}
       </div>
-      <span className="hidden max-w-48 truncate text-[10px] text-zinc-500 lg:inline" title={name}>
+      <span className="hidden max-w-48 truncate text-[10px] text-zinc-500 lg:inline" data-tip={name}>
         {name}
       </span>
     </div>

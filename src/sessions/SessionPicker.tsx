@@ -109,7 +109,7 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
   };
 
   return (
-    <div className="absolute right-0 top-9 z-50 flex max-h-[min(640px,80vh)] w-[min(600px,92vw)] flex-col rounded-xl border border-zinc-700 bg-zinc-950/97 font-f1 shadow-2xl shadow-black/60 backdrop-blur">
+    <>
       <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2">
         <span className="text-[13px] font-bold uppercase tracking-wider text-zinc-200">Sessions</span>
         <div className="ml-2 flex overflow-hidden rounded-md border border-zinc-800">
@@ -124,7 +124,7 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
           ))}
         </div>
         {season && season.source !== "openf1" && (
-          <span className="text-[10px] text-zinc-500" title="OpenF1 is closed to free users while a session is live">
+          <span className="text-[10px] text-zinc-500" data-tip="OpenF1 is closed to free users while a session is live">
             {season.source === "saved" ? "saved schedule" : "from F1's archive"}
           </span>
         )}
@@ -173,7 +173,7 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
                           <button
                             disabled={busy !== null}
                             onClick={() => (state === "live" ? follow() : load(s, m))}
-                            title={
+                            data-tip={
                               state === "live"
                                 ? "Follow it live in Pit Wall"
                                 : "Replay its timing, map, telemetry and team radio from F1's archive (F1 TV sign-in; no video)"
@@ -205,7 +205,7 @@ export function SessionPicker({ onClose, onGoLive, onOpenArchive }: Props) {
           <span className="ml-auto text-zinc-500">Times are yours</span>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -387,7 +387,7 @@ function AccountChip() {
   const chip = "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider";
   if (state === "unavailable")
     return (
-      <span className={cn(chip, "border border-zinc-800 text-zinc-500")} title="The dev page can't reach F1's sign-in; the installed extension can">
+      <span className={cn(chip, "border border-zinc-800 text-zinc-500")} data-tip="The dev page can't reach F1's sign-in; the installed extension can">
         F1 TV · extension only
       </span>
     );
@@ -396,7 +396,7 @@ function AccountChip() {
       <button
         onClick={() => openSignInForm(!formOpen)}
         className={cn(chip, state === "signed-out" ? "bg-f1-red text-white hover:brightness-110" : "border border-amber-500/60 text-amber-300 hover:bg-amber-500/10")}
-        title="Sign in with your F1 account (for cars on the map, telemetry, team radio and replays)"
+        data-tip="Sign in with your F1 account (for cars on the map, telemetry, team radio and replays)"
       >
         {state === "signed-out"
           ? "Sign in to F1 TV"

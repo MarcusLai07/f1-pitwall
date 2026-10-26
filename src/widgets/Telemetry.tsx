@@ -112,7 +112,7 @@ function DriverCard({
         </span>
         <span className="text-[12px] text-zinc-400">#{num}</span>
         {isLeaderFallback && (
-          <span className="rounded bg-zinc-800 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider text-zinc-400" title="Click drivers in the timing tower to choose">
+          <span className="rounded bg-zinc-800 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider text-zinc-400" data-tip="Click drivers in the timing tower to choose">
             Leader
           </span>
         )}

@@ -9,6 +9,7 @@ import { HeaderWeather } from "./HeaderWeather";
 import { currentScale, useUiScale } from "./scale";
 import { useF1Account } from "../sessions/f1account";
 import { CalendarIcon, LayoutIcon, RadioIcon, SessionsIcon, TrophyIcon } from "./icons";
+import { Popover } from "./Popover";
 import { shortSessionName, useNextSession } from "../sessions/schedule";
 import { CalendarPanel } from "../sessions/CalendarPanel";
 import { ChampionshipPanel } from "../sessions/ChampionshipPanel";
@@ -58,7 +59,7 @@ function SessionTitle({ compact }: { compact: boolean }) {
             "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
             next.live ? "animate-pulse bg-f1-red text-white" : "bg-sky-500/20 text-sky-300"
           )}
-          title={next.live ? "On now by the schedule; F1's feed hasn't started it yet" : "The next session on the calendar"}
+          data-tip={next.live ? "On now by the schedule; F1's feed hasn't started it yet" : "The next session on the calendar"}
         >
           {next.live ? "Now" : "Next"}
         </span>
@@ -150,7 +151,7 @@ function localZone(epochMs: number): string | undefined {
 
 function Field({ label, value, zone, accent, title }: { label: string; value: string; zone?: string; accent?: string; title?: string }) {
   return (
-    <div className="flex flex-col leading-tight" title={title}>
+    <div className="flex flex-col leading-tight" data-tip={title}>
       <span className="text-[9px] uppercase tracking-wider text-zinc-500">
         {label}
         {zone && <span className="ml-1 normal-case tracking-normal text-zinc-600">{zone}</span>}
@@ -203,7 +204,7 @@ function SourceStatus({ onGoLive, compact }: Pick<Props, "onGoLive"> & { compact
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1.5 rounded-md border border-zinc-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-600"
-        title={error ?? "Where the data comes from"}
+        data-tip={error ?? "Where the data comes from"}
       >
         <i className={cn("h-1.5 w-1.5 rounded-full", dot)} />
         {label}
@@ -222,12 +223,9 @@ function SourceStatus({ onGoLive, compact }: Pick<Props, "onGoLive"> & { compact
           className="border-f1-red/50 text-red-300 hover:border-f1-red hover:text-white"
         />
       )}
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <SourceMenu />
-        </>
-      )}
+      <Popover open={open} onClose={() => setOpen(false)} className="right-0 top-8 w-72 p-2.5 text-[11px] leading-snug text-zinc-400">
+        <SourceMenu />
+      </Popover>
     </div>
   );
 }
@@ -239,7 +237,7 @@ function SourceMenu() {
   const error = usePitwall((s) => s.error);
   const signedIn = useF1Account((s) => s.state === "signed-in");
   return (
-    <div className="absolute right-0 top-8 z-50 w-72 rounded-lg border border-zinc-800 bg-zinc-950 p-2.5 font-f1 text-[11px] leading-snug text-zinc-400 shadow-xl">
+    <>
       {source === "replay" ? (
         <p>
           <span className="font-semibold text-zinc-100">{via === "archive" ? "A past session from F1's archive" : "A recording"}</span>, played back.
@@ -272,7 +270,7 @@ function SourceMenu() {
         </>
       )}
       {error && <p className="mt-1.5 text-[10px] text-amber-400">{error}</p>}
-    </div>
+    </>
   );
 }
 
@@ -317,6 +315,7 @@ function FeedCheck() {
 
 function SessionsButton({ onGoLive, onOpenArchive }: Pick<Props, "onGoLive" | "onOpenArchive">) {
   const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
   return (
     <div className="relative">
       <IconButton
@@ -326,64 +325,52 @@ function SessionsButton({ onGoLive, onOpenArchive }: Pick<Props, "onGoLive" | "o
         active={open}
         onClick={() => setOpen((o) => !o)}
       />
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <SessionPicker
-            onClose={() => setOpen(false)}
-            onGoLive={onGoLive}
-            onOpenArchive={(path, name) => {
-              setOpen(false);
-              onOpenArchive(path, name);
-            }}
-          />
-        </>
-      )}
+      <Popover open={open} onClose={close} className="right-0 top-9 flex max-h-[min(640px,80vh)] w-[min(600px,92vw)] flex-col">
+        <SessionPicker
+          onClose={close}
+          onGoLive={onGoLive}
+          onOpenArchive={(path, name) => {
+            close();
+            onOpenArchive(path, name);
+          }}
+        />
+      </Popover>
     </div>
   );
 }
 
 function CalendarButton() {
-  // Closing plays the panel's exit animation before it unmounts
-  const [state, setState] = useState<"closed" | "open" | "closing">("closed");
-  const close = () => setState((s) => (s === "open" ? "closing" : s));
+  const [open, setOpen] = useState(false);
   return (
     <div className="relative">
       <IconButton
         label="Calendar"
         hint="The season at a glance"
         icon={<CalendarIcon className="h-4 w-4" />}
-        active={state !== "closed"}
-        onClick={() => (state === "closed" ? setState("open") : close())}
+        active={open}
+        onClick={() => setOpen((o) => !o)}
       />
-      {state !== "closed" && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={close} />
-          <CalendarPanel closing={state === "closing"} onClose={close} onClosed={() => setState("closed")} />
-        </>
-      )}
+      <Popover open={open} onClose={() => setOpen(false)} className="right-0 top-9 w-[min(660px,94vw)]">
+        <CalendarPanel onClose={() => setOpen(false)} />
+      </Popover>
     </div>
   );
 }
 
 function ChampionshipButton() {
-  const [state, setState] = useState<"closed" | "open" | "closing">("closed");
-  const close = () => setState((s) => (s === "open" ? "closing" : s));
+  const [open, setOpen] = useState(false);
   return (
     <div className="relative">
       <IconButton
         label="Championship"
         hint="Standings, the title race, teams and drivers"
         icon={<TrophyIcon className="h-4 w-4" />}
-        active={state !== "closed"}
-        onClick={() => (state === "closed" ? setState("open") : close())}
+        active={open}
+        onClick={() => setOpen((o) => !o)}
       />
-      {state !== "closed" && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={close} />
-          <ChampionshipPanel closing={state === "closing"} onClose={close} onClosed={() => setState("closed")} />
-        </>
-      )}
+      <Popover open={open} onClose={() => setOpen(false)} className="right-0 top-9 flex max-h-[min(640px,82vh)] w-[min(560px,92vw)] flex-col">
+        <ChampionshipPanel onClose={() => setOpen(false)} />
+      </Popover>
     </div>
   );
 }
@@ -401,11 +388,8 @@ function LayoutMenu() {
         active={open}
         onClick={() => setOpen((o) => !o)}
       />
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-8 z-50 w-52 rounded-lg border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
-            <UiSize />
+      <Popover open={open} onClose={() => setOpen(false)} className="right-0 top-8 w-52 p-1">
+        <UiSize />
             <div className="my-1 h-px bg-zinc-800" />
             <MenuItem
               onClick={() => {
@@ -444,9 +428,7 @@ function LayoutMenu() {
             >
               Reset to default
             </MenuItem>
-          </div>
-        </>
-      )}
+      </Popover>
     </div>
   );
 }
@@ -457,13 +439,13 @@ function UiSize() {
   const step = (d: number) => setFactor(factor + d);
   return (
     <div className="flex items-center gap-1 px-2 py-1.5 text-xs text-zinc-300">
-      <span className="flex-1" title={`Fits the window automatically; this adjusts it (now ${Math.round(currentScale() * 100)}% zoom)`}>
+      <span className="flex-1" data-tip={`Fits the window automatically; this adjusts it (now ${Math.round(currentScale() * 100)}% zoom)`}>
         UI size
       </span>
       <button onClick={() => step(-0.1)} className="h-6 w-6 rounded border border-zinc-700 hover:bg-zinc-800" aria-label="Smaller">
         −
       </button>
-      <button onClick={() => setFactor(1)} className="w-12 rounded py-0.5 text-center tabular-nums hover:bg-zinc-800" title="Back to automatic">
+      <button onClick={() => setFactor(1)} className="w-12 rounded py-0.5 text-center tabular-nums hover:bg-zinc-800" data-tip="Back to automatic">
         {factor === 1 ? "Auto" : `${Math.round(factor * 100)}%`}
       </button>
       <button onClick={() => step(0.1)} className="h-6 w-6 rounded border border-zinc-700 hover:bg-zinc-800" aria-label="Larger">

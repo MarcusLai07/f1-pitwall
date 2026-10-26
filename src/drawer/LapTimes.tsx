@@ -94,7 +94,7 @@ export function LapTimesPanel() {
                     {p && (
                       <span className="flex items-center justify-end gap-1.5">
                         {p.pit && (
-                          <span className="rounded bg-zinc-800 px-1 text-[9px] font-bold uppercase text-zinc-400" title={p.pit === "in" ? "Pit in-lap" : "Pit out-lap"}>
+                          <span className="rounded bg-zinc-800 px-1 text-[9px] font-bold uppercase text-zinc-400" data-tip={p.pit === "in" ? "Pit in-lap" : "Pit out-lap"}>
                             {p.pit}
                           </span>
                         )}

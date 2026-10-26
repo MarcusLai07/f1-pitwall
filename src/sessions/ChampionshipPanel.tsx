@@ -3,8 +3,9 @@
 // the trophy button next to Layout.
 
 import { animate } from "animejs";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn, isLightColor } from "../lib/format";
+import { PopoverHeader } from "../ui/Popover";
 import { ensureSeason } from "./schedule";
 import { driverResults, TEAMS_2026, useChampionship, type ConstructorStanding, type DriverStanding, type RaceResult, type TitleRace } from "./championship";
 
@@ -12,29 +13,14 @@ const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").match
 
 type Tab = "drivers" | "constructors" | "teams";
 
-export function ChampionshipPanel({ closing, onClose, onClosed }: { closing: boolean; onClose: () => void; onClosed: () => void }) {
+export function ChampionshipPanel({ onClose }: { onClose: () => void }) {
   const { loading, error, standings, drivers, constructors } = useChampionship();
   const [tab, setTab] = useState<Tab>("drivers");
   const [expanded, setExpanded] = useState<string | null>(null); // driverId whose results are open
-  const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // The title maths needs the season's remaining races
   useEffect(() => ensureSeason(standings?.season ?? new Date().getFullYear()), [standings?.season]);
-
-  useLayoutEffect(() => {
-    const el = panelRef.current;
-    if (!el || reducedMotion()) return;
-    animate(el, { opacity: [0, 1], translateY: [-10, 0], scale: [0.96, 1], duration: 300, ease: "outExpo" });
-  }, []);
-  const closedRef = useRef(onClosed);
-  closedRef.current = onClosed;
-  useEffect(() => {
-    if (!closing) return;
-    const el = panelRef.current;
-    if (!el || reducedMotion()) return closedRef.current();
-    animate(el, { opacity: 0, translateY: -8, scale: 0.97, duration: 160, ease: "inQuad", onComplete: () => closedRef.current() });
-  }, [closing]);
 
   // Rows slide in on a tab change
   useEffect(() => {
@@ -46,29 +32,25 @@ export function ChampionshipPanel({ closing, onClose, onClosed }: { closing: boo
   const race = tab === "constructors" ? constructors : drivers;
 
   return (
-    <div
-      ref={panelRef}
-      style={{ transformOrigin: "top right" }}
-      className="absolute right-0 top-9 z-50 flex max-h-[min(640px,82vh)] w-[min(560px,92vw)] flex-col overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950/97 font-f1 shadow-2xl shadow-black/60 backdrop-blur"
-    >
-      <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-3 py-2">
-        <span className="text-[13px] font-bold uppercase tracking-wider text-zinc-200">Championship</span>
-        {standings && <span className="text-[11px] text-zinc-500">{standings.season} · after round {standings.round}</span>}
-        <div className="ml-auto flex overflow-hidden rounded-md border border-zinc-800">
-          {(["drivers", "constructors", "teams"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cn("px-2.5 py-0.5 text-[11px] font-bold capitalize", t === tab ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white")}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <button onClick={onClose} className="flex h-6 w-6 items-center justify-center rounded text-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" aria-label="Close">
-          ×
-        </button>
-      </div>
+    <>
+      <PopoverHeader
+        title="Championship"
+        detail={standings ? `${standings.season} · after round ${standings.round}` : undefined}
+        right={
+          <div className="flex overflow-hidden rounded-md border border-zinc-800">
+            {(["drivers", "constructors", "teams"] as Tab[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={cn("px-2.5 py-0.5 text-[11px] font-bold capitalize", t === tab ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white")}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        }
+        onClose={onClose}
+      />
 
       {error && !standings && <p className="p-5 text-center text-[12px] text-amber-400">Couldn't load standings. {error}.</p>}
       {loading && !standings && <p className="p-5 text-center text-[12px] text-zinc-500">Loading standings…</p>}
@@ -90,7 +72,7 @@ export function ChampionshipPanel({ closing, onClose, onClosed }: { closing: boo
       <div className="shrink-0 border-t border-zinc-800 px-3 py-1.5 text-[10px] text-zinc-500">
         Standings from Jolpica (Ergast) · the title race is an estimate (max points left, no tie-breaks)
       </div>
-    </div>
+    </>
   );
 }
 
@@ -159,7 +141,7 @@ function DriverResults({ id }: { id: string }) {
       {state.map((r) => (
         <span
           key={r.round}
-          title={`Round ${r.round} · ${r.name} · ${r.dnf ? r.status : `P${r.position} (from P${r.grid})`} · ${r.points} pts`}
+          data-tip={`Round ${r.round} · ${r.name} · ${r.dnf ? r.status : `P${r.position} (from P${r.grid})`} · ${r.points} pts`}
           className={cn(
             "flex w-[38px] flex-col items-center rounded border px-1 py-0.5 tabular-nums",
             r.dnf

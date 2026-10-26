@@ -81,7 +81,7 @@ export function Drawer({ left, width }: { left: number; width: number }) {
         <span className="mx-1 ml-auto h-4 w-px bg-zinc-800" />
         <button
           onClick={() => openTab(open === "racebrief" ? null : "racebrief")}
-          title="Pre-race brief: weather, what's at stake, circuit guide"
+          data-tip="Pre-race brief: weather, what's at stake, circuit guide"
           className={cn(
             "relative flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors",
             open === "racebrief" ? "bg-zinc-800 text-white" : "text-amber-300/90 hover:bg-zinc-900 hover:text-amber-200",
@@ -100,7 +100,7 @@ export function Drawer({ left, width }: { left: number; width: number }) {
           <button
             onClick={() => openTab(null)}
             className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-900 hover:text-white"
-            title="Close drawer"
+            data-tip="Close drawer"
           >
             ▾
           </button>
@@ -120,7 +120,7 @@ function Toasts() {
           key={t.id}
           className="toast-in pointer-events-auto flex cursor-pointer items-stretch overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900/97 shadow-xl shadow-black/50 backdrop-blur hover:border-zinc-500"
           onClick={() => openTab(t.tab)}
-          title="Open in the drawer"
+          data-tip="Open in the drawer"
         >
           <span className="w-1.5 shrink-0" style={{ background: messageColor(t.message) }} />
           <div className="min-w-0 flex-1 px-3 py-2">

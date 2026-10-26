@@ -11,7 +11,7 @@ export function HeaderWeather({ compact }: { compact: boolean }) {
   const trackTrend = series?.map((p) => Number(p.Weather.TrackTemp)).filter(Number.isFinite) ?? [];
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1 font-f1" title="Track weather">
+    <div className="flex items-center gap-4 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1 font-f1" data-tip="Track weather">
       <Stat label="Track" value={`${w.TrackTemp ?? "—"}°`} className="text-orange-300" />
       {!compact && trackTrend.length > 1 && <Spark values={trackTrend} color="#fdba74" />}
       <Stat label="Air" value={`${w.AirTemp ?? "—"}°`} className="text-sky-300" />

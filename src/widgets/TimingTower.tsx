@@ -60,13 +60,24 @@ export function TimingTower() {
   const cols = columnsFor(size.width, isRace);
   const prevPositions = useRef(new Map<string, number>());
   const [tyreFor, setTyreFor] = useState<{ num: string; anchor: DOMRect } | null>(null);
+  // Kept mounted through its exit animation; onClosed clears it for real
+  const [tyreClosing, setTyreClosing] = useState(false);
+  const tyreForRef = useRef(tyreFor);
+  tyreForRef.current = tyreFor;
 
   useEffect(() => {
     for (const r of rows) prevPositions.current.set(r.num, r.position);
   }, [rows]);
 
+  const closeTyre = useCallback(() => {
+    if (tyreForRef.current) setTyreClosing(true);
+  }, []);
   const onTyreClick = useCallback((num: string, anchor: DOMRect) => {
-    setTyreFor((open) => (open?.num === num ? null : { num, anchor }));
+    if (tyreForRef.current?.num === num) setTyreClosing(true); // re-click closes with its animation
+    else {
+      setTyreFor({ num, anchor });
+      setTyreClosing(false);
+    }
   }, []);
   const tyreRow = tyreFor && rows.find((r) => r.num === tyreFor.num);
 
@@ -99,7 +110,7 @@ export function TimingTower() {
         {cols.live && <span style={col(w.live)} className="pl-2">Speed · Pedals</span>}
         {cols.theo && <span style={col(w.theo)} className="pr-2 text-right">Theo</span>}
       </div>
-      <div className="flex flex-1 flex-col overflow-y-auto" onScroll={() => setTyreFor(null)}>
+      <div className="flex flex-1 flex-col overflow-y-auto" onScroll={closeTyre}>
         {rows.map((row) => (
           <TimingRow
             key={row.num}
@@ -117,7 +128,16 @@ export function TimingTower() {
         ))}
       </div>
       {tyreFor && tyreRow && (
-        <TyrePopover row={tyreRow} anchor={tyreFor.anchor} onClose={() => setTyreFor(null)} />
+        <TyrePopover
+          row={tyreRow}
+          anchor={tyreFor.anchor}
+          closing={tyreClosing}
+          onClose={closeTyre}
+          onClosed={() => {
+            setTyreFor(null);
+            setTyreClosing(false);
+          }}
+        />
       )}
     </div>
   );
@@ -195,13 +215,13 @@ const TimingRow = memo(function TimingRow({
         <span
           className="flex h-[22px] w-[42px] items-center justify-center rounded-r-md text-[12px] font-bold uppercase tracking-wide"
           style={{ backgroundColor: row.color, color: isLightColor(row.color) ? "#000" : "#fff" }}
-          title={`${row.name} · ${row.team}`}
+          data-tip={`${row.name} · ${row.team}`}
         >
           {row.tla}
         </span>
         {isRace && row.grid && row.grid !== row.position && (
           <span
-            title={`Started P${row.grid}`}
+            data-tip={`Started P${row.grid}`}
             className={cn(
               "ml-1 flex h-[18px] min-w-[22px] items-center justify-center rounded px-0.5 text-[10px] font-bold",
               row.grid > row.position ? "bg-green-600/80 text-white" : "bg-red-600/80 text-white"
@@ -265,7 +285,7 @@ const TimingRow = memo(function TimingRow({
               "flex h-[24px] items-center gap-1.5 rounded-md px-1 transition-colors",
               tyreOpen ? "bg-zinc-700 ring-1 ring-zinc-500" : "hover:bg-zinc-800"
             )}
-            title="Tyre history"
+            data-tip="Tyre history"
           >
             <TyreDot compound={row.tyre.compound} />
             <span className="w-[16px] text-left text-[13px] font-bold tabular-nums text-zinc-100">{row.tyre.age}</span>

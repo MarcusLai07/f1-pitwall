@@ -1,6 +1,7 @@
 // Per-driver tyre history, opened from the tyre cell in the timing tower (replaces the
 // old Tyre strategy widget). Adapted from f1-dashboard's TyreHistoryPopover.
 
+import { animate } from "animejs";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { DriverRow } from "../data/derive";
@@ -20,7 +21,9 @@ const NAMES: Record<string, string> = {
 const WIDTH = 300;
 const MARGIN = 8;
 
-export function TyrePopover({ row, anchor, onClose }: { row: DriverRow; anchor: DOMRect; onClose: () => void }) {
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+export function TyrePopover({ row, anchor, closing, onClose, onClosed }: { row: DriverRow; anchor: DOMRect; closing: boolean; onClose: () => void; onClosed: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   // The anchor rect is in screen pixels; the popover lives in the zoomed UI (ui/scale.ts)
   const z = currentScale();
@@ -40,6 +43,21 @@ export function TyrePopover({ row, anchor, onClose }: { row: DriverRow; anchor: 
     if (top + h > viewH - MARGIN) top = Math.max(MARGIN, viewH - MARGIN - h);
     setPos({ left, top });
   }, [anchor, row.stints.length]); // box/view derive from anchor and the window
+
+  // Grow in on open; shrink back out when the tower flags it closing, then unmount
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || reducedMotion()) return;
+    animate(el, { opacity: [0, 1], scale: [0.96, 1], duration: 180, ease: "outExpo" });
+  }, []);
+  const closedRef = useRef(onClosed);
+  closedRef.current = onClosed;
+  useEffect(() => {
+    if (!closing) return;
+    const el = ref.current;
+    if (!el || reducedMotion()) return closedRef.current();
+    animate(el, { opacity: 0, scale: 0.97, duration: 140, ease: "inQuad", onComplete: () => closedRef.current() });
+  }, [closing]);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -191,7 +209,7 @@ function PitRow({ stop }: { stop?: PitStop }) {
       <span className="h-px w-3 bg-zinc-700" />
       <span className="rounded bg-zinc-800 px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-zinc-300">Pit</span>
       {!stop ? (
-        <span className="text-zinc-500" title="This stop happened before Pit Wall started watching">not timed</span>
+        <span className="text-zinc-500" data-tip="This stop happened before Pit Wall started watching">not timed</span>
       ) : (
         <>
           <span>Lap {stop.lap}</span>
@@ -202,12 +220,12 @@ function PitRow({ stop }: { stop?: PitStop }) {
           ) : (
             <>
               {stop.laneSec !== undefined && (
-                <span title="Pit lane time from the timing feed">
+                <span data-tip="Pit lane time from the timing feed">
                   <b className="text-zinc-100">{stop.laneSec.toFixed(1)} s</b> pit lane
                 </span>
               )}
               {stop.stationarySec !== undefined && (
-                <span title="Estimated from the car's speed data (±0.3 s)">
+                <span data-tip="Estimated from the car's speed data (±0.3 s)">
                   <b className="text-zinc-100">≈{stop.stationarySec.toFixed(1)} s</b> stopped
                 </span>
               )}

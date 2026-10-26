@@ -98,7 +98,7 @@ export function Board() {
                     {!locked && (
                       <button
                         className="widget-no-drag ml-auto flex h-6 w-6 items-center justify-center rounded text-base text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
-                        title={`Remove ${def.title}`}
+                        data-tip={`Remove ${def.title}`}
                         onClick={() => remove(id)}
                       >
                         ×

@@ -55,7 +55,7 @@ export function TrackMap() {
       {shape.source !== "stored" && (
         <span
           className="pointer-events-none absolute bottom-8 left-2.5 text-[9px] uppercase tracking-[0.14em] text-zinc-600"
-          title={shape.source === "live" ? "Drawn from a live lap because the stored track shape didn't match" : "Stored track shape re-aligned to live positions"}
+          data-tip={shape.source === "live" ? "Drawn from a live lap because the stored track shape didn't match" : "Stored track shape re-aligned to live positions"}
         >
           {shape.source === "live" ? "Track from live positions" : "Track auto-aligned"}
         </span>
@@ -264,7 +264,7 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
           <span
             key={`${c.label}-${i}`}
             data-frac={c.frac}
-            title={c.name ? `T${c.label} · ${c.name}` : `Turn ${c.label}`}
+            data-tip={c.name ? `T${c.label} · ${c.name}` : `Turn ${c.label}`}
             className="absolute left-0 top-0 rounded-md border border-border bg-background/85 px-1 py-px text-[9px] font-bold tracking-wide text-foreground opacity-0"
           >
             {c.label}
@@ -281,12 +281,12 @@ function MapScene({ shape, hideCars, children }: { shape: TrackShape; hideCars: 
             </span>
           ))}
         {(geometry?.overtakeZones?.length ?? 0) > 0 && (
-          <span className="flex items-center gap-1" title="Overtake zones: the main flat-out stretches (2026 has no DRS)">
+          <span className="flex items-center gap-1" data-tip="Overtake zones: the main flat-out stretches (2026 has no DRS)">
             <i className="h-0.5 w-3 rounded-sm" style={{ background: DRS_COLOR }} />OT
           </span>
         )}
         {isRace && overtakeEnabled && (
-          <span className="flex items-center gap-1 normal-case tracking-normal" title="Within a second of the car ahead: Overtake Mode is open to them (estimated from the live interval)">
+          <span className="flex items-center gap-1 normal-case tracking-normal" data-tip="Within a second of the car ahead: Overtake Mode is open to them (estimated from the live interval)">
             <i className="h-2.5 w-2.5 rounded-full" style={{ boxShadow: `0 0 0 2px ${DRS_COLOR}` }} />
             within 1 s
           </span>
@@ -381,7 +381,7 @@ function MapButton({
   return (
     <button
       onClick={onClick}
-      title={title}
+      data-tip={title}
       className={cn(
         "h-7 min-w-7 rounded-md border bg-background/85 px-2 text-[10px] font-bold uppercase tracking-wider hover:text-foreground",
         active ? "border-f1-red text-foreground" : "border-border text-muted-foreground"

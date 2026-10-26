@@ -11,6 +11,7 @@ import type { View } from "./layout/defaults";
 import { useF1Account, watchF1Account } from "./sessions/f1account";
 import { ReplayBar } from "./ui/ReplayBar";
 import { scaleFor, setCurrentScale, useUiScale } from "./ui/scale";
+import { TooltipLayer } from "./ui/Tooltip";
 import { TopBar } from "./ui/TopBar";
 
 const baseView: View = document.documentElement.dataset.view === "panel" ? "panel" : "window";
@@ -155,6 +156,7 @@ export function App() {
       <TopBar onGoLive={goLive} onOpenArchive={openArchive} />
       {layoutReady && <Board />}
       {controls && <ReplayBar controls={controls} />}
+      <TooltipLayer />
     </div>
   );
 }

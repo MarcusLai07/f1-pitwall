@@ -177,7 +177,7 @@ function StrategyCard({ location }: { location: string }) {
           <div className="flex items-baseline gap-2">
             <p className="text-[13px] font-bold text-zinc-100">Typically a {strategy.typical}-stop race</p>
             {strategy.pitSeconds != null && (
-              <span className="text-[12px] font-bold tabular-nums text-amber-300" title="Median pit-lane time lost per stop in the last race here">
+              <span className="text-[12px] font-bold tabular-nums text-amber-300" data-tip="Median pit-lane time lost per stop in the last race here">
                 ~{strategy.pitSeconds}s / stop
               </span>
             )}

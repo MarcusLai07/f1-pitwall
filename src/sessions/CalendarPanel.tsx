@@ -3,8 +3,9 @@
 // picked round's sessions. It pops out of the Calendar button with anime.js.
 
 import { animate, stagger } from "animejs";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../lib/format";
+import { PopoverHeader } from "../ui/Popover";
 import { useTicker } from "../ui/hooks";
 import { sessionState, type Meeting, type Session } from "./catalog";
 import { ensureSeason, isSeason, nextSession, shortSessionName, useSchedule } from "./schedule";
@@ -49,7 +50,7 @@ function until(ms: number): string {
   return `in ${Math.round(m / 1440)} days`;
 }
 
-export function CalendarPanel({ closing, onClosed, onClose }: { closing: boolean; onClosed: () => void; onClose: () => void }) {
+export function CalendarPanel({ onClose }: { onClose: () => void }) {
   useTicker(1 / 20);
   const now = Date.now();
   const year = new Date().getFullYear();
@@ -58,7 +59,6 @@ export function CalendarPanel({ closing, onClosed, onClose }: { closing: boolean
   const next = useMemo(() => nextSession(meetings, now), [meetings, Math.floor(now / 60_000)]);
   const [selected, setSelected] = useState<number | null>(null);
   const [month, setMonth] = useState<{ y: number; m: number } | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
 
@@ -93,22 +93,6 @@ export function CalendarPanel({ closing, onClosed, onClose }: { closing: boolean
     return [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => new Date(shownMonth.y, shownMonth.m, i + 1))] as (Date | null)[];
   }, [shownMonth.y, shownMonth.m]);
 
-  // Pop out of the button, and back in when closing
-  useLayoutEffect(() => {
-    const el = panelRef.current;
-    if (!el || reducedMotion()) return;
-    animate(el, { opacity: [0, 1], translateY: [-10, 0], scale: [0.96, 1], duration: 320, ease: "outExpo" });
-  }, []);
-  const closedRef = useRef(onClosed);
-  closedRef.current = onClosed;
-  useEffect(() => {
-    if (!closing) return;
-    const done = () => closedRef.current();
-    const el = panelRef.current;
-    if (!el || reducedMotion()) return done();
-    animate(el, { opacity: 0, translateY: -8, scale: 0.97, duration: 170, ease: "inQuad", onComplete: done });
-  }, [closing]);
-
   // Days ripple in on a month change; the round's sessions slide in on a pick
   useEffect(() => {
     const days = gridRef.current?.querySelectorAll("[data-day]");
@@ -135,18 +119,8 @@ export function CalendarPanel({ closing, onClosed, onClose }: { closing: boolean
   const today = dayKey(now);
 
   return (
-    <div
-      ref={panelRef}
-      style={{ transformOrigin: "top right" }}
-      className="absolute right-0 top-9 z-50 w-[min(660px,94vw)] overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950/97 font-f1 shadow-2xl shadow-black/60 backdrop-blur"
-    >
-      <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
-        <span className="text-[13px] font-bold uppercase tracking-wider text-zinc-200">Calendar</span>
-        <span className="text-[11px] text-zinc-500">{year} season · your time</span>
-        <button onClick={onClose} className="ml-auto flex h-6 w-6 items-center justify-center rounded text-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" aria-label="Close">
-          ×
-        </button>
-      </div>
+    <>
+      <PopoverHeader title="Calendar" detail={`${year} season · your time`} onClose={onClose} />
 
       {!isSeason(entry) ? (
         <p className="p-6 text-center text-[12px] text-zinc-500">
@@ -184,7 +158,7 @@ export function CalendarPanel({ closing, onClosed, onClose }: { closing: boolean
                     data-day
                     disabled={!m}
                     onClick={() => m && setSelected(m.key)}
-                    title={m ? `${m.name}${m.cancelled ? " (cancelled)" : ""}` : undefined}
+                    data-tip={m ? `${m.name}${m.cancelled ? " (cancelled)" : ""}` : undefined}
                     className={cn(
                       "relative flex h-[30px] items-center justify-center rounded-md text-[11.5px] tabular-nums transition-colors",
                       picked ? "bg-f1-red/80 font-bold text-white" : m ? (m.cancelled ? "bg-zinc-900 text-zinc-600 line-through" : "bg-zinc-800/80 text-zinc-100 hover:bg-zinc-700") : "text-zinc-500",
@@ -259,7 +233,7 @@ export function CalendarPanel({ closing, onClosed, onClose }: { closing: boolean
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

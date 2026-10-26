@@ -111,7 +111,7 @@ export function TeamRadio() {
                       "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px]",
                       cantPlay ? "cursor-not-allowed bg-zinc-900 text-zinc-600" : isPlaying ? "bg-f1-red text-white" : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
                     )}
-                    title={cantPlay ? "Couldn't load this clip" : isPlaying ? "Pause radio" : "Play radio"}
+                    data-tip={cantPlay ? "Couldn't load this clip" : isPlaying ? "Pause radio" : "Play radio"}
                   >
                     {cantPlay ? "✕" : isPlaying ? "❚❚" : "▶"}
                   </button>
@@ -122,7 +122,7 @@ export function TeamRadio() {
                     {d?.Tla ?? c.RacingNumber}
                   </span>
                   <span className="text-[12px] tabular-nums text-zinc-400">{trackClock(at, offset)}</span>
-                  {now - at < NEW_MS && <span className="ml-auto h-2 w-2 rounded-full bg-sky-400" title="New" />}
+                  {now - at < NEW_MS && <span className="ml-auto h-2 w-2 rounded-full bg-sky-400" data-tip="New" />}
                 </div>
                 {model && (
                   <p className={cn("mt-1 pl-8 text-[12.5px] leading-snug", text ? "text-zinc-100" : "italic text-zinc-500")}>
@@ -164,7 +164,7 @@ function TranscriptBar() {
         value={model ?? "off"}
         onChange={(e) => setModel(e.target.value === "off" ? null : (e.target.value as ModelKey))}
         className="rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-[11px] text-zinc-200"
-        title="Transcribes radio on this Mac with OpenAI's Whisper. The model downloads once."
+        data-tip="Transcribes radio on this Mac with OpenAI's Whisper. The model downloads once."
       >
         <option value="off">Off</option>
         <option value="standard">Standard ({MODEL_SIZES.standard})</option>
@@ -175,7 +175,7 @@ function TranscriptBar() {
           // Files start one after another, so a byte count reads better than a percentage
           `Downloading model · ${Math.round(downloaded / 1e6)} MB`
         ) : status === "error" ? (
-          <span className="text-red-400" title={error ?? ""}>
+          <span className="text-red-400" data-tip={error ?? ""}>
             Model failed to load
           </span>
         ) : status === "ready" ? (

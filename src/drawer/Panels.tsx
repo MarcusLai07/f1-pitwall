@@ -110,7 +110,7 @@ export function InvestigationsPanel() {
             {inc.lap ? `${inc.happenedAt ? " · " : ""}Lap ${inc.lap}` : ""}
             {` · updated ${trackClock(inc.updatedAt, offset)}`}
             {inc.history.length > 1 && (
-              <span title={inc.history.map((h) => `${trackClock(h.at, offset)}  ${h.text}`).join("\n")}> · {inc.history.length} updates</span>
+              <span data-tip={inc.history.map((h) => `${trackClock(h.at, offset)}  ${h.text}`).join("\n")}> · {inc.history.length} updates</span>
             )}
           </p>
         </div>
@@ -142,7 +142,7 @@ export function TrackLimitsPanel() {
           return (
             <div key={t.num} className="flex items-center gap-3 border-b border-zinc-800/60 px-3 py-2">
               <DriverChip num={t.num} drivers={drivers} />
-              <div className="flex gap-1" title={`${t.count} strike${t.count === 1 ? "" : "s"}`}>
+              <div className="flex gap-1" data-tip={`${t.count} strike${t.count === 1 ? "" : "s"}`}>
                 {Array.from({ length: Math.max(4, t.count) }, (_, i) => (
                   <span
                     key={i}
