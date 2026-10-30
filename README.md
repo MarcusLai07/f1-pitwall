@@ -11,6 +11,8 @@ A browser extension for Chrome, Edge, Brave, Arc, Opera, Vivaldi, Dia and other 
 
 <sub>[▶ Watch in full quality (MP4)](docs/media/demo.mp4)</sub>
 
+[![Sponsor Pit Wall](https://img.shields.io/badge/%E2%9D%A4_Sponsor-db61a2?style=flat&logo=github&logoColor=white)](https://github.com/sponsors/MarcusLai07)
+
 </div>
 
 ## Install in one line (macOS)
@@ -134,6 +136,14 @@ Straight from the source, in your browser. Pit Wall has no server.
 ## Replay
 
 Past sessions loaded from **Sessions** play in the replay bar. Space plays and pauses; the bar has seek, ±10 s and 1–16× speed. Replays start a minute before the session's clock starts. **Go live** switches back.
+
+## Support
+
+Pit Wall is free and built for the love of the sport. If it's made your race weekends better and you'd like to chip in, you can sponsor the project — from anywhere, by card:
+
+[**❤ Sponsor on GitHub**](https://github.com/sponsors/MarcusLai07)
+
+Every bit keeps the updates coming. Thank you! 🏁
 
 ## Develop
 
