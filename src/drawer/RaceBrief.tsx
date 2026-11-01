@@ -7,8 +7,8 @@ import { cn } from "../lib/format";
 import { useChampionship } from "../sessions/championship";
 import { ensureSeason, useNextSession } from "../sessions/schedule";
 import type { Meeting, Session } from "../sessions/catalog";
-import { usePitwall } from "../data/store";
 import { useNomination, useRaceWeather, useRaceStrategy } from "./raceWeather";
+import { useWeekendTyres, type WeekendTyre } from "./weekendTyres";
 
 const day = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -136,7 +136,7 @@ function StakeCard({ meeting }: { meeting: Meeting }) {
   );
 }
 
-const COMPOUND = ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"];
+const COMPOUND_ORDER = ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"] as const;
 const COMPOUND_SHORT: Record<string, string> = { SOFT: "S", MEDIUM: "M", HARD: "H", INTERMEDIATE: "I", WET: "W" };
 const COMPOUND_COLOR: Record<string, string> = { SOFT: "#ef4444", MEDIUM: "#eab308", HARD: "#e5e7eb", INTERMEDIATE: "#22c55e", WET: "#3b82f6" };
 
@@ -201,48 +201,19 @@ function StrategyCard({ location }: { location: string }) {
   );
 }
 
-interface TyreUse {
-  code: string;
-  color: string;
-  used: { compound: string; n: number }[];
-}
-
-/** Fresh tyre sets each driver has used in the session now loaded (the feed only tracks
- *  the current session, so this is "used so far", not the full weekend allocation). */
-function useSessionTyres(): TyreUse[] | null {
-  const app = usePitwall((s) => s.live.TimingAppData);
-  const drivers = usePitwall((s) => s.live.DriverList);
-  const source = usePitwall((s) => s.source);
-  return useMemo(() => {
-    if (source !== "live" && source !== "replay") return null;
-    const lines = app?.Lines;
-    if (!lines || !drivers) return null;
-    const out: TyreUse[] = [];
-    for (const [num, line] of Object.entries(lines)) {
-      const d = drivers[num];
-      if (!d) continue;
-      const counts = new Map<string, number>();
-      for (const st of line.Stints ?? []) {
-        if (st.New === "true" && st.Compound) counts.set(st.Compound, (counts.get(st.Compound) ?? 0) + 1);
-      }
-      if (!counts.size) continue;
-      out.push({
-        code: d.Tla,
-        color: d.TeamColour ? `#${d.TeamColour}` : "#808080",
-        used: COMPOUND.filter((c) => counts.has(c)).map((c) => ({ compound: c, n: counts.get(c)! })),
-      });
-    }
-    return out.length ? out : null;
-  }, [app, drivers, source]);
-}
-
 function TyresCard({ sprint }: { sprint: boolean }) {
-  const tyres = useSessionTyres();
+  const tyres = useWeekendTyres();
   const alloc = sprint ? ALLOCATION.sprint : ALLOCATION.normal;
   const total = alloc.S + alloc.M + alloc.H;
+  const weekend = tyres?.weekend ?? false;
+  const footer = !tyres
+    ? ""
+    : weekend
+      ? `Sets left = allocation − new sets run across the weekend's sessions${tyres.skipped ? ` (${tyres.skipped} F1 wouldn't send, so these read a little high)` : ""}. Excludes mandatory practice returns, so treat it as a close estimate.`
+      : "Standard dry allocation · F1 reports only the current session's sets, so this is used-so-far, not the whole weekend.";
   return (
-    <Section title="Tyre sets used (this session)" className="md:col-span-2">
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[10px]" data-tip="Each driver's dry allocation for the weekend. Subtract what they've run to gauge how many are left.">
+    <Section title={weekend ? "Tyre sets left (this weekend)" : "Tyre sets used (this session)"} className="md:col-span-2">
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[10px]" data-tip="Each driver's dry allocation for the weekend.">
         <span className="uppercase tracking-wider text-zinc-500">Weekend allocation</span>
         {([["S", alloc.S, "SOFT"], ["M", alloc.M, "MEDIUM"], ["H", alloc.H, "HARD"]] as const).map(([short, n, comp]) => (
           <span key={short} className="font-bold tabular-nums" style={{ color: COMPOUND_COLOR[comp] }}>
@@ -255,28 +226,38 @@ function TyresCard({ sprint }: { sprint: boolean }) {
         </span>
       </div>
       {!tyres ? (
-        <p className="text-[12px] text-zinc-500">Shows during a session, once cars run. F1 only sends tyre sets for the live session, not the full weekend.</p>
+        <p className="text-[12px] text-zinc-500">Shows during a session, once cars run. The weekend's earlier sessions are read from F1's archive.</p>
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 md:grid-cols-4">
-          {tyres.map((t) => (
-            <div key={t.code} className="flex items-center gap-1.5 text-[11px]">
-              <span className="w-8 font-bold text-zinc-200" style={{ color: t.color }}>
-                {t.code}
-              </span>
-              <span className="flex gap-1">
-                {t.used.map((u) => (
-                  <span key={u.compound} className="tabular-nums" style={{ color: COMPOUND_COLOR[u.compound] }}>
-                    {u.n}
-                    {COMPOUND_SHORT[u.compound] ?? "?"}
-                  </span>
-                ))}
-              </span>
-            </div>
+          {tyres.rows.map((t) => (
+            <TyreRow key={t.code} row={t} alloc={alloc} weekend={weekend} />
           ))}
         </div>
       )}
-      <p className="mt-1.5 text-[9px] text-zinc-600">Standard dry allocation · F1 reports only the current session's sets, so this is used-so-far, not the whole weekend.</p>
+      <p className="mt-1.5 text-[9px] text-zinc-600">{footer}</p>
     </Section>
+  );
+}
+
+function TyreRow({ row, alloc, weekend }: { row: WeekendTyre; alloc: { S: number; M: number; H: number }; weekend: boolean }) {
+  const usedText = COMPOUND_ORDER.filter((c) => row.used[c]).map((c) => `${row.used[c]}${COMPOUND_SHORT[c]}`).join(" ");
+  const cells = weekend
+    ? ([["SOFT", alloc.S], ["MEDIUM", alloc.M], ["HARD", alloc.H]] as const).map(([c, a]) => ({ c, n: Math.max(0, a - (row.used[c] ?? 0)) }))
+    : COMPOUND_ORDER.filter((c) => row.used[c]).map((c) => ({ c, n: row.used[c]! }));
+  return (
+    <div className="flex items-center gap-1.5 text-[11px]" data-tip={weekend ? `Used this weekend: ${usedText || "none yet"}` : undefined}>
+      <span className="w-8 font-bold text-zinc-200" style={{ color: row.color }}>
+        {row.code}
+      </span>
+      <span className="flex gap-1">
+        {cells.map(({ c, n }) => (
+          <span key={c} className="tabular-nums" style={{ color: COMPOUND_COLOR[c] }}>
+            {n}
+            {COMPOUND_SHORT[c]}
+          </span>
+        ))}
+      </span>
+    </div>
   );
 }
 

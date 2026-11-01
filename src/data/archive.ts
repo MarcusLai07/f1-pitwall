@@ -7,7 +7,7 @@
 import { parseGmtOffset, parseUtc } from "../lib/format";
 import { f1Token, reportRefused } from "../sessions/f1account";
 import type { Recording } from "./replay";
-import type { CarDataFrame, LiveState, PositionFrame } from "./types";
+import type { CarDataFrame, LiveState, PositionFrame, Stint, TimingAppData } from "./types";
 
 // The dev page goes through Vite's proxy; the extension has host permission
 export const ARCHIVE_BASE = import.meta.env.DEV ? "/f1static/" : "https://livetiming.formula1.com/static/";
@@ -65,6 +65,28 @@ export async function archivePath(year: number, sessionKey: number, base = ARCHI
     if (s?.Path) return s.Path;
   }
   return null;
+}
+
+/** Final tyre stints per driver (racing number) from one archived session. Downloads only
+ *  that session's TimingAppData, so it's cheap enough to run for every session of a weekend. */
+export async function loadSessionStints(path: string, base = ARCHIVE_BASE, signal?: AbortSignal): Promise<Record<string, Stint[]>> {
+  const folder = base + path.replace(/^\/+/, "").replace(/\/?$/, "/");
+  const res = await archiveFetch(`${folder}TimingAppData.jsonStream`, signal);
+  if (res.status === 404) return {};
+  if (!res.ok) throw new Error(`F1's archive answered ${res.status}`);
+  let state: unknown = {};
+  for (const [, body] of streamLines(await res.text())) {
+    let patch: unknown;
+    try {
+      patch = JSON.parse(body);
+    } catch {
+      continue;
+    }
+    state = merge(state, patch);
+  }
+  const out: Record<string, Stint[]> = {};
+  for (const [num, line] of Object.entries((state as TimingAppData).Lines ?? {})) out[num] = line.Stints ?? [];
+  return out;
 }
 
 // ---------- merging F1's patches ----------
