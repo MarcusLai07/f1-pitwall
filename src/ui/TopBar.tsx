@@ -101,6 +101,7 @@ function SessionClock() {
     <div className="flex items-center gap-4 font-f1 tabular-nums">
       {!idle && Number.isFinite(remaining) && <Field label="Remaining" value={formatDuration(remaining)} />}
       {!idle && laps?.TotalLaps ? <Field label="Lap" value={`${laps.CurrentLap ?? 0}/${laps.TotalLaps}`} /> : null}
+      {!idle && laps?.TotalLaps ? <Field label="To go" value={`${Math.max(0, laps.TotalLaps - (laps.CurrentLap ?? 0))}`} accent="text-amber-300" /> : null}
       {/* Same moment twice: at the circuit, and in your own time zone */}
       <Field label="Track time" zone={gmtOffset ? utcLabel(offset) : undefined} value={trackClock(now, offset)} />
       <Field label="Your time" zone={localZone(now)} value={localClock(now)} accent="text-sky-200" />

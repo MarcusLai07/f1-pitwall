@@ -41,6 +41,12 @@ const LOOKAHEAD_MS = 1500;
 const KEEPALIVE_MS = 15_000;
 // Largest believable difference between F1's clock and ours
 const MAX_SKEW_MS = 5 * 60_000;
+// A 403 means F1 is blocking the connection at its edge, not a passing glitch; wait this
+// long before trying again so repeated attempts don't deepen a rate-limit
+const BLOCK_RETRY_MS = 3 * 60_000;
+
+/** F1's edge refused the connection (403) — a block to wait out, not a transient error */
+class BlockedError extends Error {}
 
 interface Pending {
   at: number; // server time, ms
@@ -185,15 +191,17 @@ export function startF1Live(delayMs: () => number): () => void {
       signal: abort.signal,
     });
     let neg = await fetch(`${HUB}/negotiate?negotiateVersion=1`, { method: "POST", ...opts({ "Content-Type": "application/json" }) });
-    if (neg.status >= 400 && neg.status < 500 && token) {
-      // F1 refused the token: carry on with the free feed
+    // A 401 means F1 refused the token: drop it and carry on with the free feed. A 403 is
+    // the edge blocking the connection itself (region/network/anti-bot), which the free
+    // feed can't get around either — so keep the token and don't double the requests.
+    if (neg.status >= 400 && neg.status < 500 && neg.status !== 403 && token) {
       if (neg.status === 401) reportRefused(token);
       token = null;
       neg = await fetch(`${HUB}/negotiate?negotiateVersion=1`, { method: "POST", ...opts({ "Content-Type": "application/json" }) });
     }
     if (!neg.ok) {
-      // 403 = F1 is blocking this connection (region or network), not a missing sign-in
-      throw new Error(neg.status === 403 ? "F1 is blocking live timing from your connection (403)" : `F1 live timing answered ${neg.status}`);
+      if (neg.status === 403) throw new BlockedError("F1 is blocking live timing from your connection (403)");
+      throw new Error(`F1 live timing answered ${neg.status}`);
     }
     // A first idea of F1's clock (to the second) before any update arrives, so the
     // subscribe snapshot is timed right on a machine whose clock is off
@@ -206,7 +214,10 @@ export function startF1Live(delayMs: () => number): () => void {
       fetch(url, { method: "POST", body: JSON.stringify(msg) + RS, ...opts({ "Content-Type": "text/plain;charset=UTF-8" }) });
 
     const res = await fetch(url, opts({ Accept: "text/event-stream" }));
-    if (!res.ok || !res.body) throw new Error(`F1 live timing answered ${res.status}`);
+    if (!res.ok || !res.body) {
+      if (res.status === 403) throw new BlockedError("F1 is blocking live timing from your connection (403)");
+      throw new Error(`F1 live timing answered ${res.status}`);
+    }
     await send({ protocol: "json", version: 1 });
     const keepalive = setInterval(() => send({ type: 6 }).catch(() => {}), KEEPALIVE_MS);
     try {
@@ -251,15 +262,25 @@ export function startF1Live(delayMs: () => number): () => void {
   (async () => {
     while (!abort.signal.aborted) {
       subscribed = false;
+      // After a clean end (F1 drops idle streams between sessions) reconnect promptly
+      let wait = 1000;
       try {
         await session();
       } catch (err) {
         if (abort.signal.aborted) return;
         failures++;
-        usePitwall.setState({ status: failures > 1 ? "offline" : "connecting", error: err instanceof Error ? err.message : String(err) });
+        const blocked = err instanceof BlockedError;
+        const base = err instanceof Error ? err.message : String(err);
+        // A 403 is a block, not a transient failure — hammering it every 30 s only risks a
+        // deeper rate-limit, so wait minutes and let the edge clear before trying again.
+        wait = blocked ? BLOCK_RETRY_MS : Math.min(30_000, 1000 * 2 ** Math.min(failures, 5));
+        usePitwall.setState({
+          status: failures > 1 ? "offline" : "connecting",
+          error: blocked ? `${base} — retrying in ${Math.round(wait / 60_000)} min` : base,
+        });
       }
       // Back off, then reconnect (the subscribe result brings the whole state again)
-      await new Promise((r) => setTimeout(r, Math.min(30_000, 1000 * 2 ** Math.min(failures, 5))));
+      await new Promise((r) => setTimeout(r, wait));
     }
   })();
 

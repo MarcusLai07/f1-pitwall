@@ -28,6 +28,7 @@ export function RaceBriefPanel() {
   if (!target) return <Empty>Waiting for the schedule…</Empty>;
   const { meeting, race } = target;
   const season = new Date(race?.start ?? meeting.start ?? Date.now()).getFullYear();
+  const sprint = meeting.sessions.some((s) => /^Sprint$/i.test(s.name));
   return (
     <div className="h-full overflow-y-auto p-3">
       <div className="mb-2 flex items-center gap-2">
@@ -41,7 +42,7 @@ export function RaceBriefPanel() {
         <StakeCard meeting={meeting} />
         <NominationCard season={season} location={meeting.location || meeting.circuit} />
         <StrategyCard location={meeting.location || meeting.circuit} />
-        <TyresCard />
+        <TyresCard sprint={sprint} />
         <CircuitCard meeting={meeting} />
       </div>
     </div>
@@ -142,6 +143,10 @@ const COMPOUND_COLOR: Record<string, string> = { SOFT: "#ef4444", MEDIUM: "#eab3
 // Pirelli's hardest→softest C-range palette (independent of per-weekend white/yellow/red)
 const C_COLOR: Record<string, string> = { C1: "#60a5fa", C2: "#e5e7eb", C3: "#eab308", C4: "#f97316", C5: "#ef4444", C6: "#ec4899" };
 
+// Pirelli/FIA dry allocation per driver: 13 sets a normal weekend (8 soft, 3 medium,
+// 2 hard), 12 on a sprint weekend (6 soft, 4 medium, 2 hard). A fixed rule, not in the feed.
+const ALLOCATION = { normal: { S: 8, M: 3, H: 2 }, sprint: { S: 6, M: 4, H: 2 } };
+
 function NominationCard({ season, location }: { season: number; location: string }) {
   const nom = useNomination(season, location);
   return (
@@ -231,14 +236,28 @@ function useSessionTyres(): TyreUse[] | null {
   }, [app, drivers, source]);
 }
 
-function TyresCard() {
+function TyresCard({ sprint }: { sprint: boolean }) {
   const tyres = useSessionTyres();
+  const alloc = sprint ? ALLOCATION.sprint : ALLOCATION.normal;
+  const total = alloc.S + alloc.M + alloc.H;
   return (
-    <Section title="Tyre sets used (this session)">
+    <Section title="Tyre sets used (this session)" className="md:col-span-2">
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[10px]" data-tip="Each driver's dry allocation for the weekend. Subtract what they've run to gauge how many are left.">
+        <span className="uppercase tracking-wider text-zinc-500">Weekend allocation</span>
+        {([["S", alloc.S, "SOFT"], ["M", alloc.M, "MEDIUM"], ["H", alloc.H, "HARD"]] as const).map(([short, n, comp]) => (
+          <span key={short} className="font-bold tabular-nums" style={{ color: COMPOUND_COLOR[comp] }}>
+            {n}
+            {short}
+          </span>
+        ))}
+        <span className="font-semibold tabular-nums text-zinc-300">
+          {total} sets{sprint ? " · sprint" : ""}
+        </span>
+      </div>
       {!tyres ? (
         <p className="text-[12px] text-zinc-500">Shows during a session, once cars run. F1 only sends tyre sets for the live session, not the full weekend.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 md:grid-cols-4">
           {tyres.map((t) => (
             <div key={t.code} className="flex items-center gap-1.5 text-[11px]">
               <span className="w-8 font-bold text-zinc-200" style={{ color: t.color }}>
@@ -256,6 +275,7 @@ function TyresCard() {
           ))}
         </div>
       )}
+      <p className="mt-1.5 text-[9px] text-zinc-600">Standard dry allocation · F1 reports only the current session's sets, so this is used-so-far, not the whole weekend.</p>
     </Section>
   );
 }
