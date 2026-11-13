@@ -8,7 +8,7 @@
 //   npm run build && node scripts/capture-media.mjs recordings/2026-us-gp-fp3.ndjson.gz
 //
 // Writes docs/media/*.png, docs/media/demo.mp4 and docs/media/demo.gif (needs ffmpeg).
-// CHROME=/path/to/chrome picks the browser (default: Playwright's cached Chrome for Testing).
+// CHROME=/path/to/chrome picks the browser (default: Playwright's newest cached Chrome for Testing).
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -19,9 +19,13 @@ const root = path.join(import.meta.dirname, "..");
 const out = path.join(root, "docs/media");
 const dist = path.join(root, "dist");
 const recording = path.resolve(process.argv[2] ?? "recordings/2026-us-gp-fp3.ndjson.gz");
+// Playwright's newest cached Chrome for Testing (npx playwright-core install chromium)
+const pwCache = path.join(os.homedir(), "Library/Caches/ms-playwright");
+const cft = fs.existsSync(pwCache) && fs.readdirSync(pwCache).filter((d) => /^chromium-\d+$/.test(d)).sort((a, b) => b.split("-")[1] - a.split("-")[1])[0];
 const CHROME =
   process.env.CHROME ??
-  path.join(os.homedir(), "Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");
+  (cft && path.join(pwCache, cft, "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"));
+if (!CHROME || !fs.existsSync(CHROME)) throw new Error("No Chrome for Testing: run npx playwright-core install chromium, or set CHROME=");
 // Served under its own name, which the replay bar shows
 const REC_URL = `https://pitwall-media.invalid/${path.basename(recording)}`;
 const W = 1440, H = 900;
@@ -88,7 +92,7 @@ const CURSOR = `(() => {
 
 async function openBoard(page, file = "window.html") {
   await page.goto(`${base}/${file}?replay=${encodeURIComponent(REC_URL)}`);
-  await page.locator('[title="Play"]').waitFor({ timeout: 120_000 });
+  await page.locator('[data-tip="Play"]').waitFor({ timeout: 120_000 });
   await page.evaluate(CURSOR);
   // Well into the session, when most cars are running
   await page.evaluate(() => {
@@ -98,7 +102,7 @@ async function openBoard(page, file = "window.html") {
     s.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await page.getByRole("button", { name: "4×" }).click();
-  await page.locator('[title="Play"]').click();
+  await page.locator('[data-tip="Play"]').click();
   await wait(2500);
 }
 
@@ -124,9 +128,9 @@ async function dismissTop(page, ms = 300) {
   await page.mouse.up();
   await wait(250);
 }
-// Tower rows carry "Name · Team" titles; the k-th one is the k-th car on the board
-const driver = (page, k) => page.locator('[title*=" · "]').nth(k);
-const tyre = (page, k) => page.locator('[title="Tyre history"]').nth(k);
+// Tower rows carry "Name · Team" tooltips; the k-th one is the k-th car on the board
+const driver = (page, k) => page.locator('span.rounded-r-md[data-tip*=" · "]').nth(k);
+const tyre = (page, k) => page.locator('[data-tip="Tyre history"]').nth(k);
 
 /** Bounding box (CSS px) around the elements matching a page-side expression, padded */
 async function around(page, expr, pad = 16) {
@@ -140,8 +144,12 @@ async function around(page, expr, pad = 16) {
 }
 const shot = async (page, name, clip) => {
   // Hidden at once: the fade-out transition would still be showing in the screenshot
+  // …and so is the tooltip left by the last hover
+  const tipLayer = `document.querySelector('[class~="z-[100]"].fixed')`;
   await page.evaluate(() => window.__cursor && Object.assign(window.__cursor.style, { transition: "none", opacity: 0 }));
+  await page.evaluate(`${tipLayer} && (${tipLayer}.style.visibility = "hidden")`);
   await page.screenshot({ path: path.join(out, name), clip });
+  await page.evaluate(`${tipLayer} && (${tipLayer}.style.visibility = "")`);
   await page.evaluate(() => window.__cursor && (window.__cursor.style.transition = "transform .12s,opacity .3s"));
   console.log("saved", name);
 };
@@ -154,6 +162,13 @@ await driver(page, 1).click();
 await wait(1500);
 await shot(page, "window.png");
 
+// The track map in 3D
+await page.getByRole("button", { name: "3d", exact: true }).click();
+await wait(2200);
+await shot(page, "map.png", await around(page, `[document.querySelector("#pitwall-root canvas")]`, 0));
+await page.getByRole("button", { name: "top", exact: true }).click();
+await wait(800);
+
 await driver(page, 2).click();
 await driver(page, 3).click();
 await wait(1500);
@@ -165,7 +180,7 @@ await shot(
 
 await tyre(page, 0).click();
 await wait(800);
-await shot(page, "tyres.png", await around(page, `[document.querySelector("#pitwall-root .fixed.z-50.rounded-xl"), document.querySelector('[title="Tyre history"]')]`, 24));
+await shot(page, "tyres.png", await around(page, `[document.querySelector("#pitwall-root .fixed.z-50.rounded-xl"), document.querySelector('[data-tip="Tyre history"]')]`, 24));
 await page.keyboard.press("Escape");
 
 await page.getByRole("button", { name: "Race control", exact: true }).click();
@@ -177,6 +192,8 @@ await page.getByRole("button", { name: "Race control", exact: true }).click();
 // Race brief: the next race's weather, stakes, Pirelli compounds, strategy, tyres, circuit
 await page.getByRole("button", { name: "Race brief" }).click();
 await wait(4500);
+// Open-Meteo can take a while; don't shoot "Loading forecast…"
+await page.getByText("Loading forecast").waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
 await shot(page, "racebrief.png", await around(page, `[...document.querySelector("#pitwall-root .pointer-events-none.absolute.bottom-0.z-40").children].slice(-2)`, 0));
 await page.getByRole("button", { name: "Race brief" }).click();
 
@@ -268,6 +285,6 @@ const list = shots
 fs.writeFileSync(path.join(frames, "list.txt"), `${list}\nfile '${shots.at(-1).file}'\n`);
 const ff = (...a) => execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...a], { stdio: "inherit" });
 ff("-f", "concat", "-safe", "0", "-i", path.join(frames, "list.txt"), "-vf", "fps=30,scale=1440:-2:flags=lanczos", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23", "-movflags", "+faststart", path.join(out, "demo.mp4"));
-ff("-i", path.join(out, "demo.mp4"), "-vf", "fps=8,scale=760:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=112:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle", path.join(out, "demo.gif"));
+ff("-i", path.join(out, "demo.mp4"), "-vf", "fps=8,scale=880:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle", path.join(out, "demo.gif"));
 fs.rmSync(frames, { recursive: true, force: true });
 console.log(`saved demo.mp4, demo.gif (${shots.length} frames)`);

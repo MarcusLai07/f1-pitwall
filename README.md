@@ -1,27 +1,35 @@
 <div align="center">
 
+<img src="public/icons/icon-128.png" width="80" alt="">
+
 # Pit Wall
 
 **F1 live timing, track map and telemetry in one window you arrange yourself.**<br>
-Live and past sessions, the championship, a race-day brief and the calendar — straight from F1 with your F1 TV login.
+Live and past sessions, the championship, a race-day brief and the calendar, with your F1 TV login.
 
-A browser extension for Chrome, Edge, Brave, Arc, Opera, Vivaldi, Dia and other Chromium browsers
+Chrome · Edge · Brave · Arc · Opera · Vivaldi · Dia &nbsp;—&nbsp; any Chromium browser
 
-<img src="docs/media/demo.gif" width="800" alt="Pit Wall replaying a practice session: picking drivers opens their telemetry, then the tyre history, the 3D map, the race brief, the championship and the calendar">
+[![Latest release](https://img.shields.io/github/v/release/MarcusLai07/f1-pitwall?style=flat-square&label=release&color=e10600)](https://github.com/MarcusLai07/f1-pitwall/releases/latest)
+[![MIT license](https://img.shields.io/badge/license-MIT-4c4c4c?style=flat-square)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/%E2%9D%A4_Sponsor-db61a2?style=flat-square&logo=github&logoColor=white)](https://github.com/sponsors/MarcusLai07)
+
+<br>
+
+<img src="docs/media/demo.gif" width="880" alt="Pit Wall replaying a practice session: picking drivers opens their telemetry, then the tyre history, the 3D map, the race brief, the championship and the calendar">
 
 <sub>[▶ Watch in full quality (MP4)](docs/media/demo.mp4)</sub>
 
-[![Sponsor Pit Wall](https://img.shields.io/badge/%E2%9D%A4_Sponsor-db61a2?style=flat&logo=github&logoColor=white)](https://github.com/sponsors/MarcusLai07)
-
 </div>
 
-## Install in one line (macOS)
+## Install
+
+**macOS**, in one line:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MarcusLai07/f1-pitwall/main/install.sh | bash
 ```
 
-It downloads the latest release to `~/PitWall`, copies that folder's path to your clipboard and opens your browser's extensions page: your default browser if it's Chromium-based, otherwise the first Chromium browser it finds. Then:
+It downloads the latest release to `~/PitWall`, copies that folder's path to your clipboard and opens your browser's extensions page (your default browser if it's Chromium-based, otherwise the first Chromium browser it finds). Then:
 
 1. Turn on **Developer mode** (top right).
 2. Click **Load unpacked** → press **⌘⇧G** → **⌘V** → Return → **Select**.
@@ -42,66 +50,79 @@ It downloads the latest release to `~/PitWall`, copies that folder's path to you
 | Somewhere else | `… \| bash -s -- --dir ~/Apps/PitWall` |
 | Uninstall | `… \| bash -s -- --uninstall`, then remove Pit Wall from the extensions page |
 
-**Why the manual click?** Browsers only let you add an extension outside their store through *Load unpacked*. No script is allowed to do it for you.
+**Why the manual click?** Browsers only let you add an extension from outside their store through *Load unpacked*. No script is allowed to do it for you.
 
 </details>
 
 ## What it does
 
-<img src="docs/media/window.png" alt="The whole board: timing tower with mini-sectors and places gained, 3D track map with every numbered car and the pit lane, sector leaderboard, telemetry for two drivers, team radio and the weather strip">
+<img src="docs/media/window.png" alt="The whole board: timing tower with mini-sectors, the track map with every numbered car, sector leaderboard, telemetry for two drivers, team radio and the weather strip">
 
-One window you lay out yourself: the timing tower, a 3D track map, telemetry, team radio and the sector leaderboard, with a drawer for race control and lap data underneath. Three buttons at the top open the championship, the calendar and — at the right of the drawer — a pre-race brief.
+One window you lay out yourself: the timing tower, a track map, telemetry, team radio and the sector leaderboard, with a drawer for race control and lap data underneath. The header has the time and laps remaining, track and local time, and the weather.
 
 <table>
 <tr>
 <td width="50%" valign="top">
 <img src="docs/media/telemetry.png" alt="Telemetry cards for four drivers, the extra two opening out to the left over the timing tower">
-<b>Telemetry for up to five cars.</b> Click drivers in the timing tower for their speed, gear, RPM, throttle and brake. Two cards sit in the widget; the rest open out to the left at the same size.
+<br><b>Telemetry for up to five cars.</b> Click drivers in the tower for their speed, gear, RPM, throttle and brake. Two cards sit in the widget; the rest open out to its left.
 </td>
 <td width="50%" valign="top">
-<img src="docs/media/sessions.png" alt="The Sessions panel with the season's sessions and the F1 TV sign-in form">
-<b>Every session, live or past.</b> Follow a live session, or replay any past one from F1's archive. Sign in with your F1 account: the password goes only to F1.
+<img src="docs/media/map.png" alt="The 3D track map: a road at its real width edged in sector colours, with numbered team-coloured cars and the pit lane">
+<br><b>3D track map with the pit lane.</b> The track at its real width, edged in sector colours, with each car as a numbered team-coloured dot and the pit lane alongside. Drag, rotate, zoom or follow a driver.
 </td>
 </tr>
 <tr>
+<td valign="top">
+<img src="docs/media/sessions.png" alt="The Sessions panel with the season's sessions and the F1 TV sign-in form">
+<br><b>Every session, live or past.</b> Follow a live session or replay any past one from F1's archive. Sign in with your F1 account; the password goes only to F1.
+</td>
 <td valign="top">
 <img src="docs/media/tyres.png" alt="A driver's tyre history: each set, its laps and best lap, with the pit stops in between">
-<b>Tyre history.</b> Click a driver's tyre: every set, new or used, the laps run on it, its best lap, and each pit stop in between.
-</td>
-<td valign="top">
-<img src="docs/media/drawer.png" alt="The drawer under the timing tower open on lap times">
-<b>Race control and lap data.</b> A drawer under the tower holds race control, investigations, track limits, every lap time and the race trace. New messages pop up above it.
+<br><b>Tyre history.</b> Click a driver's tyre for every set, new or used, the laps run on it, its best lap, and each pit stop in between.
 </td>
 </tr>
 <tr>
 <td valign="top">
-<img src="docs/media/championship.png" alt="The Championship panel: drivers' standings with the title race and one driver's season expanded into a chip per round">
-<b>Championship and the title race.</b> Drivers' and constructors' standings, how many can still win and when it's clinched, each driver's season race by race, and the full team roster. From Jolpica — works with no live session.
+<img src="docs/media/championship.png" alt="The Championship panel: drivers' standings with one driver's season expanded into a chip per round">
+<br><b>Championship and the title race.</b> Drivers' and constructors' standings, who can still win and when it's clinched, and each driver's season race by race.
 </td>
 <td valign="top">
-<img src="docs/media/racebrief.png" alt="The pre-race brief: race-day weather, what's at stake, Pirelli compounds, likely strategy, tyres used and a circuit guide">
-<b>Pre-race brief.</b> The next race's weather forecast, what's at stake in the title fight, the Pirelli compounds, the likely number of stops and the time each costs from past races here, the tyre sets used so far, and a circuit guide.
+<img src="docs/media/racebrief.png" alt="The pre-race brief: race-day weather, what's at stake, Pirelli compounds, likely strategy and the tyre sets each driver has used">
+<br><b>Pre-race brief.</b> The race-day forecast, what's at stake, the Pirelli compounds, the likely number of stops and what each costs here, and the tyre sets used against the weekend's allocation.
 </td>
 </tr>
 <tr>
 <td valign="top">
 <img src="docs/media/calendar.png" alt="The Calendar panel: a month grid with the race weekends marked, beside the next round's sessions and a countdown">
-<b>The season at a glance.</b> A month grid in your time zone with the race weekends marked (sprint weekends in purple), beside the picked round's sessions with their times and a countdown.
+<br><b>The season at a glance.</b> A month grid in your time zone with race weekends marked (sprints in purple), beside the round's sessions and a countdown.
 </td>
 <td valign="top">
-<b>3D track map with the pit lane.</b> The track is a road at its real width, edged in the sector colours with the overtake zones down the middle and the pit lane alongside, so you can see who's peeled off to pit. Each car is a team-coloured dot with its number; a new fastest lap or leader drops in as a banner.
+<img src="docs/media/drawer.png" alt="The drawer under the timing tower open on race control">
+<br><b>Race control and lap data.</b> A drawer under the tower holds race control, investigations, track limits, every lap time and the race trace. New messages pop up above it.
 </td>
 </tr>
 </table>
 
 <details>
-<summary><b>The side panel view</b></summary>
+<summary><b>The full guide</b></summary>
 
 <br>
 
-<img src="docs/media/sidepanel.png" width="300" alt="Pit Wall's compact one-column view in the browser's side panel">
+- **Sessions:** every session of a season, past, live and upcoming, in your time zone. **Replay** plays a past one from F1's archive and **Follow** switches to live. Your F1 TV sign-in sits top right.
+- **Replay bar:** space plays and pauses; the bar has seek, ±10 s and 1–16× speed. Replays start a minute before the session's clock starts. **Go live** switches back.
+- **Source chip** (top right, e.g. *Live · F1 TV · 3 s behind* or *Replay · F1 TV archive*): what the board shows and where it comes from. Click it to set the live delay and see which topics F1 is sending.
+- **Header:** time remaining (and laps to go in races), **Track time** next to **Your time**, and a weather strip. With nothing live it looks ahead to the next session with a countdown.
+- **Timing tower:** in races a green/red badge shows places gained or lost since the start (hover for the grid slot). Mini-sectors sit under each sector time. Pit stops show the official pit-lane time plus the time stood still, estimated from car data (±0.3 s). Live, stops and laps count from when Pit Wall starts watching; archive sessions have them all.
+- **Drivers:** click up to five in the tower. Telemetry shows the two most recent in the widget and the rest as floating cards; the map highlights them and **follow** tracks the most recent one.
+- **Track map:** **names** adds every driver's code. In races, while race control has overtake enabled, cars within a second of the car ahead get a green ring (estimated from the live interval). Drag to move, right-drag (or Shift + drag) to rotate and tilt, scroll to zoom, double-click or **fit** to frame the track. A new fastest lap (provisional pole in Q3) or leader drops in as a banner. If F1 moves the coordinate frame or there's no stored track shape, the map re-aligns or draws the track from a live lap, and remembers it per circuit and season.
+- **Team radio:** play any clip. Set **Transcripts** to *Standard* (about 250 MB) or *Light* (about 80 MB) to transcribe clips on your computer with OpenAI's Whisper, in the browser. The model downloads once and transcripts are kept.
+- **Drawer:** Race control, Investigations (each incident's latest status and penalty), Track limits (strikes per driver), Lap times (every lap with tyres) and Race trace (gap to the leader by lap; lap times in practice and qualifying). The amber tab at the right opens the **Race brief**.
+- **Championship** (trophy button): the **Teams** tab lists each team's engine, base and drivers. From Jolpica, so it works with no live session.
+- **Layout:** hover a widget's top edge to slide its title bar down, then drag to move and resize from the edges. The **Layout** menu adds or removes widgets, locks the layout, switches between *snap upward* and *free placement*, resets it, and sets the **UI size**.
+- **Any screen:** the window is laid out for a ~900 px tall screen and scales to the real one. Nothing scrolls; widgets resize to fit. The window remembers its size and position.
+- **Side panel:** right-click the toolbar button → **Open in side panel** for a compact one-column view next to whatever you're browsing (Chrome, Edge, Brave and others with Chrome's side panel). Narrow windows use the same layout.
 
-Right-click Pit Wall's toolbar button → **Open in side panel** for a one-column view next to whatever you're browsing (in browsers with Chrome's side panel, such as Chrome, Edge and Brave).
+<img src="docs/media/sidepanel.png" width="280" alt="Pit Wall's compact one-column view in the browser's side panel">
 
 </details>
 
@@ -109,43 +130,32 @@ Right-click Pit Wall's toolbar button → **Open in side panel** for a one-colum
 
 Straight from the source, in your browser. Pit Wall has no server.
 
-- **Live timing:** F1's live timing feed. Without signing in you get F1's free feed: timing, sectors and race control. **Sign in to F1 TV** (top right of **Sessions**) to add cars on the map, telemetry and team radio. F1's feed runs ahead of most video streams, so open the source menu (the **Live · F1** chip) and raise **Delay** until the timing matches what you're watching.
-- **Past sessions:** **Sessions → Replay** loads any past session's timing, track positions, telemetry and team radio from F1's timing archive (the one FastF1 uses). It needs the F1 TV sign-in. There's no video; scrub with the replay bar.
-- **Standings, calendar and brief:** the championship comes from [Jolpica](https://github.com/jolpica/jolpica-f1) (the Ergast continuation), the schedule from [OpenF1](https://openf1.org) (F1's archive index as a fallback), the race-day weather from [Open-Meteo](https://open-meteo.com), and the Pirelli compounds from a small [data file](data/nominations.json) in this repo. None of these needs a sign-in.
-- **Signing in:** click **Sign in to F1 TV** at the top right of **Sessions** and enter your F1 account's email and password. Pit Wall signs in to F1's own sign-in service (`id.formula1.com`) the way [FastF1](https://docs.fastf1.dev) does: your email and password go only to F1, and Pit Wall keeps just the F1 TV token F1 gives back (in the extension's own storage), never the password. If this browser is already signed in to F1, it may not even ask. The token lasts a few days; sign in again when Sessions says it ran out. Click your plan's name (e.g. **F1 TV Pro ▾**) to **Sign out of Pit Wall**, which deletes the token. (formula1.com used to leave the token in a cookie; Pit Wall still uses one if it finds it.)
-- **Video:** Pit Wall shows data only. Watch the session wherever you normally do and set the **Delay** to match it. It doesn't depend on F1 TV's video, so it also works where F1 TV blocks live streams or current-season replays.
+- **Live timing:** F1's live timing feed. Without signing in you get F1's free feed: timing, sectors and race control. **Sign in to F1 TV** (top right of **Sessions**) to add cars on the map, telemetry and team radio. F1's feed runs ahead of most video streams, so raise **Delay** in the source chip until the timing matches what you're watching.
+- **Past sessions:** **Sessions → Replay** loads any past session's timing, positions, telemetry and team radio from F1's timing archive (the one FastF1 uses). Needs the F1 TV sign-in.
+- **Standings, calendar and brief:** standings from [Jolpica](https://github.com/jolpica/jolpica-f1) (the Ergast continuation), the schedule from [OpenF1](https://openf1.org) (F1's archive index as a fallback), race-day weather from [Open-Meteo](https://open-meteo.com), and the Pirelli compounds from a small [data file](data/nominations.json) in this repo. None needs a sign-in.
+- **Video:** Pit Wall shows data only. Watch wherever you normally do and set the **Delay** to match. It doesn't use F1 TV's video, so it also works where F1 TV blocks live streams.
 
-## Use
+<details>
+<summary><b>Signing in, permissions and notes</b></summary>
 
-- **Sessions:** every session of a season, past, live and upcoming, in your time zone. **Replay** plays a past one from F1's archive and **Follow** switches to live. Your F1 TV sign-in sits top right.
-- **Championship** (trophy button): the drivers' and constructors' standings with the title race — how many can still win, how many points are left, and when the leader has clinched it. Click a driver for their season, a chip per round coloured by result (win, podium, points, DNF). The **Teams** tab lists each team's engine, base and drivers. Standings come from Jolpica, so it works with no live session.
-- **Race brief** (the amber tab at the right of the drawer bar): a pre-race brief for the next race — the weather forecast (Open-Meteo), what's at stake in the title race, the Pirelli compound nomination, the likely strategy (typical stop count and the median pit-lane time lost per stop, from past races at the circuit), the tyre sets each driver has used in the running session, and a circuit guide (length, turns, laps, DRS zones, pit loss, lap record).
-- **Calendar** (calendar button): the season in a month grid in your time zone, the race weekends marked (sprint weekends in purple), beside the picked round's sessions with their times and a countdown to the next one.
-- **Source chip** (top right, e.g. *Live · F1 TV · 3 s behind* or *Replay · F1 TV archive*): what the board shows and where it comes from. Click it to set the live delay and see which topics F1 is actually sending.
-- **Toolbar button:** opens Pit Wall in its own window (or focuses it). The window remembers its size and position.
-- **Any screen:** the window is laid out for a ~900 px tall screen and scales to the real one, so a big monitor gets the same layout, just larger; other aspect ratios only stretch the columns. Nothing scrolls: widgets resize to fit the height. **Layout → UI size** makes everything bigger or smaller.
-- **Right-click the toolbar button → Open in side panel:** the compact one-column view, in browsers that have Chrome's side panel (Chrome, Edge, Brave and others). Narrow windows (under 760 px) use the same layout.
-- **Header:** session time remaining, **Track time** (the circuit's time zone) next to **Your time** (the same moment in yours), and a weather strip. With nothing live it looks ahead: the next session (e.g. *NEXT · Mexico City Grand Prix · Race*) and a countdown to it.
-- **Timing tower:** in races a green/red badge by each driver shows the places they've gained or lost since the start (hover for their grid slot). Mini-sectors sit under each sector time. Click a driver's tyre for their tyre history: every set, new or used, the laps run on it and its best lap, with each pit stop in between (official pit-lane time, plus the time stood still estimated from car data, ±0.3 s). Live, stops are timed from when Pit Wall starts watching; sessions loaded from F1's archive have every stop.
-- **Click drivers** in the timing tower to select them (up to five). Telemetry shows the two most recent in the widget; cars 3–5 open out to its left as floating cards of the same size. The map highlights them and **follow** tracks the most recent one.
-- **Track map:** the track is drawn as a road at its real width, edged in the sector colours with the overtake zones down the middle and the pit lane alongside (learned from where cars drive through it), and each car is a team-coloured dot with its number (leader on top; **names** adds every driver's code, selected drivers always show theirs). Zoom in, or turn on **follow**, to see who's on the inside or peeled off to pit. In a race, while race control has overtake enabled, cars within a second of the car ahead get a green ring (estimated from the live interval; 2026's car data has no overtake signal). Drag to move it, right-drag (or Shift + drag) to rotate and tilt, scroll to zoom, double-click or **fit** to frame the whole track again. A new fastest lap (provisional pole in Q3) and, in races, a new leader drop in as banners at the top of the map. It checks the stored track shape against where cars actually drive: if F1 has moved the coordinate frame it re-aligns the shape, and if the layout doesn't match at all (or there's no stored shape) it draws the track from a live lap instead. The result is remembered per circuit and season.
-- **Team radio:** play any clip. Set **Transcripts** to *Standard* (about 250 MB) or *Light* (about 80 MB) to transcribe clips on your computer with OpenAI's Whisper, right in the browser; the model downloads once and transcripts are kept.
-- **Drawer** (under the timing tower): Race control, Investigations (each incident's latest status and any penalty), Track limits (strikes per driver), Lap times (every lap by driver, with tyres) and Race trace (gap to the leader by lap; lap times in practice and qualifying). New race control messages pop up above it; click one to open its tab. Live, lap times and race trace start from when Pit Wall starts watching; sessions loaded from F1's archive have every lap.
-- **Layout:** hover the top edge of a widget to slide its title bar down, then drag it to move and resize from the edges. The grid moves in steps of one timing row, and the tower stops growing at the last driver. The **Layout** menu adds or removes widgets, locks the layout, switches between *snap upward* (default) and *free placement*, and resets to the default.
+<br>
 
-## Replay
+- **Signing in:** Pit Wall signs in to F1's own sign-in service (`id.formula1.com`) the way [FastF1](https://docs.fastf1.dev) does. Your email and password go only to F1; Pit Wall keeps just the F1 TV token F1 gives back, in the extension's own storage, and only sends it to F1's live timing and archive at `livetiming.formula1.com`. If this browser is already signed in to F1, it may not ask. The token lasts a few days. Click your plan's name (e.g. **F1 TV Pro ▾**) to **Sign out of Pit Wall**, which deletes it.
+- **Permissions:** `*.formula1.com` to sign in and reach the live feed and archive (team radio too), `cookies` to pick up a formula1.com login left in a cookie, and `api.openf1.org`, `api.jolpi.ca`, `api.open-meteo.com` and `raw.githubusercontent.com` for the schedule, standings, weather and tyre nominations.
+- F1's live feed and archive are unofficial interfaces and could change without notice.
+- Circuits without a stored shape (e.g. Madring) show a map after about one lap of running, drawn from live positions (no sector colours or turn numbers there).
+- For personal use. Don't redistribute the timing data.
 
-Past sessions loaded from **Sessions** play in the replay bar. Space plays and pauses; the bar has seek, ±10 s and 1–16× speed. Replays start a minute before the session's clock starts. **Go live** switches back.
+</details>
 
 ## Support
 
-Pit Wall is free and built for the love of the sport. If it's made your race weekends better and you'd like to chip in, you can sponsor the project — from anywhere, by card:
+Pit Wall is free and built for the love of the sport. If it's made your race weekends better, you can chip in from anywhere, by card: [**❤ Sponsor on GitHub**](https://github.com/sponsors/MarcusLai07). Every bit keeps the updates coming. Thank you! 🏁
 
-[**❤ Sponsor on GitHub**](https://github.com/sponsors/MarcusLai07)
+<details>
+<summary><b>For developers</b></summary>
 
-Every bit keeps the updates coming. Thank you! 🏁
-
-## Develop
+<br>
 
 Needs Node 20+.
 
@@ -155,30 +165,28 @@ npm run dev     # dev page
 npm run build   # the extension, in dist/ (Load unpacked → dist)
 ```
 
-The dev page opens on [localhost:5288/window.html](http://localhost:5288/window.html) (or `/sidepanel.html`). The dev server proxies `/f1live` to F1's live feed, `/f1static` to its archive and `/jolpi` to Jolpica, because none send CORS headers; the built extension uses `host_permissions` instead. F1 TV sign-in only works in the built extension, which has host permissions for F1's sign-in service; the dev page shows *F1 TV · extension only*.
+The dev page opens on [localhost:5288/window.html](http://localhost:5288/window.html) (or `/sidepanel.html`). The dev server proxies `/f1live` to F1's live feed, `/f1static` to its archive and `/jolpi` to Jolpica, because none send CORS headers; the built extension uses `host_permissions` instead. F1 TV sign-in only works in the built extension; the dev page shows *F1 TV · extension only*.
 
 - `?replay=/recordings/<file>` loads a saved live-feed recording (gzip NDJSON, one state per line) from `recordings/`.
 - `?archive=<session path>&archiveBase=/recordings/archive/` plays a saved copy of an archive session, e.g. `recordings/archive/2024/2024-10-27_Mexico_City_Grand_Prix/2024-10-27_Race/` holding its `.jsonStream` files.
 
-**Tyre nominations:** `data/nominations.json` holds Pirelli's compounds per race (by season then city); Pit Wall fetches it live from GitHub, so editing it on `main` updates every copy with no release. Update it with `node scripts/update-nominations.mjs --season 2026 --city "Mexico City" --compounds C3,C4,C5`.
+**Tyre nominations:** `data/nominations.json` holds Pirelli's compounds per race (by season then city). Pit Wall fetches it live from GitHub, so editing it on `main` updates every copy with no release: `node scripts/update-nominations.mjs --season 2026 --city "Mexico City" --compounds C3,C4,C5`.
 
 **Releasing:** bump the version in `package.json` and `public/manifest.json`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow builds the extension, stamps the tag's version into its manifest and attaches `pit-wall.zip` to a GitHub release, which `install.sh` downloads.
 
-**README media:** `npm run build && node scripts/capture-media.mjs recordings/<recording>.ndjson.gz` records `docs/media` (the screenshots, `demo.mp4` and `demo.gif`) by driving the built extension in headless Chrome for Testing through a saved session. F1's sign-in is answered with stand-ins, and the season schedule is served from `scripts/media/season-<year>.json` (so the Calendar and Race brief fill in even while OpenF1 is shut to free users during a live session) — the championship, weather and Pirelli nomination come from their live sources. Nothing is sent to F1. Needs ffmpeg; `CHROME=` picks another browser binary.
+**README media:** `npm run build && node scripts/capture-media.mjs recordings/<recording>.ndjson.gz` records `docs/media` (the screenshots, `demo.mp4` and `demo.gif`) by driving the built extension in headless Chrome for Testing (`npx playwright-core install chromium`) through a saved session. F1's sign-in is answered with stand-ins and the season schedule is served from `scripts/media/season-<year>.json`; the championship, weather and Pirelli nomination come from their live sources. Needs ffmpeg; `CHROME=` picks another browser binary.
 
 Code map:
 
 - `src/data/`: F1 live feed client (`f1live.ts`), F1 archive loader (`archive.ts`), replay engine, store, sample buffers for car positions and telemetry, and `derive.ts`, which turns raw F1 topics into tower rows.
 - `src/sessions/`: the session picker and its schedule (`catalog.ts`), the F1 TV sign-in (`f1login.ts`, `f1account.ts`), the championship (`championship.ts`, `ChampionshipPanel.tsx`) and the calendar (`CalendarPanel.tsx`).
-- `src/drawer/`: the drawer tabs and the pre-race brief (`RaceBrief.tsx`, `raceWeather.ts`).
+- `src/drawer/`: the drawer tabs and the pre-race brief (`RaceBrief.tsx`, `raceWeather.ts`, `weekendTyres.ts`).
 - `src/widgets/`: the widgets. The timing tower, telemetry and track map are adapted from `f1-dashboard`.
 - `src/circuit3d/`, `src/circuits/`: the three.js circuit engine and the FastF1-derived track geometry, copied from `f1-dashboard`.
 - `src/layout/`: grid layout, defaults and persistence.
 
-## Notes
+</details>
 
-- F1's live feed and archive are unofficial interfaces and could change without notice.
-- Permissions: `*.formula1.com` to sign in to F1 and reach its live feed and archive (team radio clips come from there too), `cookies` to pick up a formula1.com login left in a cookie, and `api.openf1.org`, `api.jolpi.ca`, `api.open-meteo.com` and `raw.githubusercontent.com` for the schedule, standings, weather and tyre nominations.
-- Your F1 TV token stays in your browser. Pit Wall only sends it to F1's own live timing and archive at `livetiming.formula1.com`; your password only ever goes to `id.formula1.com`.
-- Circuits without a stored shape (e.g. Madring) or with a different layout show a map after about one lap of running, drawn from live positions (no sector colours or turn numbers there).
-- For personal use. Don't redistribute the timing data.
+<br>
+
+<sub>Not affiliated with Formula 1 or F1 TV. MIT licensed.</sub>
