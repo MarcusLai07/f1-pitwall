@@ -3,6 +3,9 @@
   "2026": {
     "austin": { "hard": "C2", "medium": "C3", "soft": "C4", "source": "formula1.com / motorbox 2026 US GP" },
     "mexico city": { "hard": "C3", "medium": "C4", "soft": "C5", "source": "motorbox 2026" },
-    "são paulo": { "hard": "C3", "medium": "C4", "soft": "C5", "source": "motorbox 2026" }
+    "são paulo": { "hard": "C3", "medium": "C4", "soft": "C5", "source": "motorbox 2026" },
+    "las vegas": { "hard": "C3", "medium": "C4", "soft": "C5", "source": "tyrepress.com / motorsport.com, Nov 2026" },
+    "lusail": { "hard": "C1", "medium": "C2", "soft": "C3", "source": "FIA Doc 13 · Pirelli Preview V2, 2026 Qatar GP" },
+    "abu dhabi": { "hard": "C3", "medium": "C4", "soft": "C5", "source": "tyrepress.com / motorsport.com, Nov 2026" }
   }
 }
