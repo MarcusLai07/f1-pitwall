@@ -38,7 +38,8 @@ export function Drawer({ left, width }: { left: number; width: number }) {
       <div
         className={cn(
           "pointer-events-auto overflow-hidden rounded-t-lg border-x border-t border-zinc-700 bg-zinc-950/97 shadow-2xl shadow-black/60 backdrop-blur transition-[height,opacity] duration-300 ease-out",
-          open ? "h-[min(420px,55vh)] opacity-100" : "h-0 border-transparent opacity-0"
+          // The race brief has a row of section tabs on top, so it gets a little more room
+          open === "racebrief" ? "h-[min(452px,60vh)] opacity-100" : open ? "h-[min(420px,55vh)] opacity-100" : "h-0 border-transparent opacity-0"
         )}
       >
         {open === "racecontrol" && <RaceControlPanel />}
@@ -81,7 +82,7 @@ export function Drawer({ left, width }: { left: number; width: number }) {
         <span className="mx-1 ml-auto h-4 w-px bg-zinc-800" />
         <button
           onClick={() => openTab(open === "racebrief" ? null : "racebrief")}
-          data-tip="Pre-race brief: weather, what's at stake, circuit guide"
+          data-tip="Pre-race brief: weather, tyres, this weekend's rules, grid penalties"
           className={cn(
             "relative flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors",
             open === "racebrief" ? "bg-zinc-800 text-white" : "text-amber-300/90 hover:bg-zinc-900 hover:text-amber-200",

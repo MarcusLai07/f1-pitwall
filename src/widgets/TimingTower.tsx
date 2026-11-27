@@ -9,6 +9,7 @@ import { trackNow, usePitwall } from "../data/store";
 import { TYRE_COLORS, TYRE_SHORT, cn, isLightColor, segmentColor } from "../lib/format";
 import { useSize, useTicker } from "../ui/hooks";
 import { TyrePopover } from "./TyrePopover";
+import { capState, cNumber, useLiveTyreRules, type LiveTyreRules } from "../drawer/weekendBrief";
 
 // One width per column, shared by the header and every cell so they line up exactly
 // Sized so Speed · Pedals still fits a 13-column tower on a 16:10 laptop (~770 px)
@@ -58,6 +59,8 @@ export function TimingTower() {
   const zones = kind === "qualifying" ? qualifyingZones(part, rows.length) : null;
   const [ref, size] = useSize<HTMLDivElement>();
   const cols = columnsFor(size.width, isRace);
+  // This weekend's C-numbers and any stint limit (from the FIA's documents)
+  const tyreRules = useLiveTyreRules();
   const prevPositions = useRef(new Map<string, number>());
   const [tyreFor, setTyreFor] = useState<{ num: string; anchor: DOMRect } | null>(null);
   // Kept mounted through its exit animation; onClosed clears it for real
@@ -124,6 +127,7 @@ export function TimingTower() {
             previousPosition={prevPositions.current.get(row.num)}
             onClick={toggleSelected}
             onTyreClick={onTyreClick}
+            tyreRules={tyreRules}
           />
         ))}
       </div>
@@ -154,6 +158,7 @@ interface RowProps {
   previousPosition: number | undefined;
   onClick: (num: string) => void;
   onTyreClick: (num: string, anchor: DOMRect) => void;
+  tyreRules: LiveTyreRules;
 }
 
 const TimingRow = memo(function TimingRow({
@@ -167,12 +172,14 @@ const TimingRow = memo(function TimingRow({
   previousPosition,
   onClick,
   onTyreClick,
+  tyreRules,
 }: RowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
   const isOut = row.status === "OUT" || row.status === "STOPPED";
   const knockedOut = eliminated || row.status === "KO";
   const positionChange = previousPosition !== undefined ? previousPosition - row.position : 0;
   const { w } = cols;
+  const cap = row.tyre && DRY.has(row.tyre.compound) ? capState(row.tyre.age, tyreRules.stintCap) : null;
 
   useEffect(() => {
     if (!rowRef.current || positionChange === 0) return;
@@ -285,10 +292,17 @@ const TimingRow = memo(function TimingRow({
               "flex h-[24px] items-center gap-1.5 rounded-md px-1 transition-colors",
               tyreOpen ? "bg-zinc-700 ring-1 ring-zinc-500" : "hover:bg-zinc-800"
             )}
-            data-tip="Tyre history"
+            data-tip={tyreTip(row.tyre, tyreRules)}
           >
             <TyreDot compound={row.tyre.compound} />
-            <span className="w-[16px] text-left text-[13px] font-bold tabular-nums text-zinc-100">{row.tyre.age}</span>
+            <span
+              className={cn(
+                "w-[16px] text-left text-[13px] font-bold tabular-nums",
+                cap?.level === "last" ? "text-red-400" : cap?.level === "near" ? "text-amber-400" : "text-zinc-100"
+              )}
+            >
+              {row.tyre.age}
+            </span>
           </button>
         )}
       </div>
@@ -325,6 +339,18 @@ function Time({ cell }: { cell: TimeCell }) {
       {cell.value}
     </span>
   );
+}
+
+const DRY = new Set(["SOFT", "MEDIUM", "HARD"]);
+const TYRE_NAME: Record<string, string> = { SOFT: "Soft", MEDIUM: "Medium", HARD: "Hard", INTERMEDIATE: "Inter", WET: "Wet" };
+
+/** "Medium C2 · 23 laps · 4 left before the 27-lap limit" */
+function tyreTip(tyre: NonNullable<DriverRow["tyre"]>, rules: LiveTyreRules) {
+  const c = cNumber(rules.compounds, tyre.compound);
+  const parts = [`${TYRE_NAME[tyre.compound] ?? tyre.compound}${c ? ` ${c}` : ""}`, `${tyre.age} lap${tyre.age === 1 ? "" : "s"}`];
+  const cap = DRY.has(tyre.compound) ? capState(tyre.age, rules.stintCap) : null;
+  if (cap) parts.push(cap.left > 0 ? `${cap.left} left before the ${rules.stintCap}-lap limit` : `at the ${rules.stintCap}-lap limit`);
+  return `${parts.join(" · ")} — click for tyre history`;
 }
 
 export function TyreDot({ compound, small }: { compound: string; small?: boolean }) {

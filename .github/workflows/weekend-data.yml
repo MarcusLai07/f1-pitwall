@@ -1,0 +1,60 @@
+# Keeps the Race Brief's weekend data current: reads the FIA's event documents
+# (scripts/update-weekend.mjs) and publishes weekend.json on the `weekend-data` branch,
+# which every copy of Pit Wall fetches. The branch holds one commit that's replaced
+# each time the data changes, so main's history stays clean.
+name: Weekend data
+
+on:
+  schedule:
+    - cron: "*/15 * * * 4,5,6,0" # Thu–Sun (race weekends): every 15 minutes
+    - cron: "0 */3 * * 1,2,3" # Mon–Wed: every 3 hours (late decisions, next event's first notes)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekend-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pdftotext
+        run: sudo apt-get install -y -qq poppler-utils >/dev/null
+
+      - name: Fetch the last published data
+        run: |
+          if git fetch -q --depth=1 origin weekend-data; then
+            git show origin/weekend-data:weekend.json > "$RUNNER_TEMP/prev.json"
+          else
+            echo '{}' > "$RUNNER_TEMP/prev.json"
+          fi
+
+      - name: Read the FIA documents
+        run: node scripts/update-weekend.mjs --prev "$RUNNER_TEMP/prev.json" --out "$RUNNER_TEMP/weekend.json"
+
+      - name: Publish if changed
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if cmp -s "$RUNNER_TEMP/prev.json" "$RUNNER_TEMP/weekend.json"; then
+            echo "No change"
+            exit 0
+          fi
+          mkdir "$RUNNER_TEMP/out" && cd "$RUNNER_TEMP/out"
+          cp "$RUNNER_TEMP/weekend.json" weekend.json
+          git init -q -b weekend-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add weekend.json
+          git commit -q -m "Weekend data $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:weekend-data

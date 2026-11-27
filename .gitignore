@@ -5,3 +5,4 @@ recordings/*
 *.log
 .DS_Store
 public/ort/
+data/weekend.json

@@ -1,0 +1,13 @@
+{
+  "_comment": "Hand-written additions to the FIA-derived weekend data (scripts/update-weekend.mjs merges them in). By season, then FIA event name, lowercased. stintCap: Pirelli's max laps per tyre set when the FIA PDF only shows it as a graphic. rules: plain-English notes for the Race Brief's Rules tab; tag is a short label, doc the FIA document number it comes from.",
+  "2026": {
+    "qatar grand prix": {
+      "stintCap": 27,
+      "rules": [
+        { "tag": "QUALI", "title": "No dawdling between the Safety Car lines", "body": "Every qualifying lap has a maximum time, in- and out-laps included. Teams get it after FP2; breaches are investigated after the session.", "doc": 14 },
+        { "tag": "PIT LANE", "title": "Pit entry: keep right of the bollard", "body": "Passing to its right counts as entering the pit lane.", "doc": 14 },
+        { "tag": "PRACTICE", "title": "Practice starts after FP2", "body": "After the chequered flag, drivers may do two extra laps only to stop on the grid and practise starts.", "doc": 14 }
+      ]
+    }
+  }
+}

@@ -9,6 +9,7 @@ import { pitStops, usePits, type PitStop } from "../data/pits";
 import { TYRE_COLORS, cn, formatDuration, isLightColor } from "../lib/format";
 import { currentScale } from "../ui/scale";
 import { TyreDot } from "./TimingTower";
+import { capState, cNumber, useLiveTyreRules } from "../drawer/weekendBrief";
 
 const NAMES: Record<string, string> = {
   SOFT: "Soft",
@@ -25,6 +26,10 @@ const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").match
 
 export function TyrePopover({ row, anchor, closing, onClose, onClosed }: { row: DriverRow; anchor: DOMRect; closing: boolean; onClose: () => void; onClosed: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const rules = useLiveTyreRules();
+  const cOf = (compound: string) => cNumber(rules.compounds, compound);
+  const dry = !!row.tyre && ["SOFT", "MEDIUM", "HARD"].includes(row.tyre.compound);
+  const cap = dry && row.tyre ? capState(row.tyre.age, rules.stintCap) : null;
   // The anchor rect is in screen pixels; the popover lives in the zoomed UI (ui/scale.ts)
   const z = currentScale();
   const box = { left: anchor.left / z, right: anchor.right / z, top: anchor.top / z };
@@ -139,8 +144,34 @@ export function TyrePopover({ row, anchor, closing, onClose, onClosed }: { row: 
         <Stat label="Pit stops" value={String(row.pitStops)} />
         {laneTotal > 0 && <Stat label="In pit lane" value={`${laneTotal.toFixed(1)} s`} />}
         <Stat label="Laps" value={String(row.laps)} />
-        {row.tyre && <Stat label="Current set" value={`${NAMES[row.tyre.compound] ?? row.tyre.compound} · ${row.tyre.age} laps`} />}
+        {row.tyre && (
+          <Stat
+            label="Current set"
+            value={`${NAMES[row.tyre.compound] ?? row.tyre.compound}${cOf(row.tyre.compound) ? ` ${cOf(row.tyre.compound)}` : ""} · ${row.tyre.age} laps`}
+          />
+        )}
       </div>
+
+      {cap && row.tyre && (
+        // This weekend caps the laps any one set may do (all sessions count)
+        <div className="mx-3 mt-2.5 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-2" data-tip="Pirelli's limit for this event. Laps from earlier sessions on the set count too.">
+          <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wider text-zinc-400">
+            <span>Laps on this set</span>
+            <span className={cn("text-[13px] font-black tabular-nums tracking-normal", cap.level === "last" ? "text-red-400" : cap.level === "near" ? "text-amber-400" : "text-zinc-100")}>
+              {row.tyre.age} / {rules.stintCap}
+            </span>
+          </div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className={cn("h-full rounded-full", cap.level === "last" ? "bg-red-500" : cap.level === "near" ? "bg-amber-400" : "bg-zinc-500")}
+              style={{ width: `${Math.min(100, (row.tyre.age / rules.stintCap!) * 100)}%` }}
+            />
+          </div>
+          <p className="mt-1 text-[11px] text-zinc-300">
+            {cap.left > 0 ? `${cap.left} lap${cap.left === 1 ? "" : "s"} left before this weekend's ${rules.stintCap}-lap limit.` : `At this weekend's ${rules.stintCap}-lap limit: the set has to come off.`}
+          </p>
+        </div>
+      )}
 
       {stints.length > 0 ? (
         <>
@@ -172,6 +203,7 @@ export function TyrePopover({ row, anchor, closing, onClose, onClosed }: { row: 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-[13px] font-bold text-zinc-100">{NAMES[s.compound] ?? s.compound}</span>
+                      {cOf(s.compound) && <span className="text-[11px] font-semibold text-zinc-400">{cOf(s.compound)}</span>}
                       <span className={cn("text-[11px] font-semibold", s.isNew ? "text-green-400" : "text-zinc-400")}>
                         {s.isNew ? "new" : `used${s.usedLaps ? ` +${s.usedLaps}` : ""}`}
                       </span>
